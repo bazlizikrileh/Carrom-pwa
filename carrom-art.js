@@ -43,7 +43,7 @@ export function striker(c, x, y, r, accent = '#2f5bb7', o = {}) {
 export function rack(c, cx, cy, r, o = {}) {
   const pts = [[cx, cy, 'queen']];
   for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3 + Math.PI / 6; pts.push([cx + Math.cos(a) * r * 2.02, cy + Math.sin(a) * r * 2.02, i % 2 ? 'black' : 'white']); }
-  if (o.full !== false) for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6 + Math.PI / 6, d = i % 2 ? r * 3.5 : r * 4.04; pts.push([cx + Math.cos(a) * d, cy + Math.sin(a) * d, i % 2 ? 'white' : 'black']); }
+  if (o.full !== false) for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6 + Math.PI / 6, d = i % 2 ? r * 3.5 : r * 4.04; pts.push([cx + Math.cos(a) * d, cy + Math.sin(a) * d, i % 2 ? 'black' : 'white']); }
   const k = o.k == null ? 1 : o.k;   // pecahan (animasi)
   pts.forEach(([x, y, kind], i) => { if (i < Math.ceil(pts.length * k)) coin(c, x, y, r, kind, { shadow: o.shadow }); });
   return pts;

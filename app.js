@@ -527,7 +527,7 @@ function settingsFormAll(t, locked) {
     <div class="section-title" style="margin-top:0">Maklumat</div>
     <label>Nama pertandingan</label><input name="name" value="${esc(t.name)}" required>
     <div class="grid2">
-      <div><label>Kelab / Penganjur</label><select name="clubId">${opt({ kskpkpjb: 'KSKPKPJB', ksasall: 'KSAS', sendiri: '🙋 Persendirian (main santai)', lain: 'Lain-lain', '': '— Tiada —' }, clubOf(t).id)}</select></div>
+      <div><label>Kelab / Penganjur</label><select name="clubId">${opt({ ksasall: 'KSAS', kskpkpjb: 'KSKPKPJB', sendiri: '🙋 Persendirian (main santai)', lain: 'Lain-lain', '': '— Tiada —' }, clubOf(t).id)}</select></div>
       <div><label>Tarikh</label><input name="date" type="date" value="${esc(t.date)}"></div>
       <div><label>Masa mula</label><input name="startTime" type="time" value="${esc(t.startTime)}"></div>
       <div><label>Minit setiap sesi</label><input name="sessionMin" type="number" min="10" max="90" step="5" value="${t.sessionMin}"></div>
@@ -654,7 +654,7 @@ async function readLogo(form, t) {
 function viewNew() {
   const t = E.newTournament();
   if (cloud.state.user && !cloud.state.user.anon) t.createdBy = { name: cloud.state.user.name || (cloud.state.user.email || '').split('@')[0], at: Date.now() };
-  t.clubId = ls.get('carrom:lastClub') ?? 'kskpkpjb';
+  t.clubId = ls.get('carrom:lastClub') ?? 'ksasall';
   t.waGroup = (CLUBS[t.clubId] || {}).waGroup || '';
   $app.innerHTML = `${section('Pertandingan', 'Cipta baharu')}
     <p class="notice small">${cloud.isAdmin() ? '☁️ Pertandingan ini akan disimpan di awan dan boleh dilihat semua orang.' : '📱 Anda belum log masuk sebagai admin, jadi pertandingan ini disimpan dalam peranti ini sahaja (sesuai untuk ujian). Ia boleh dipindah ke awan kemudian.'}</p>
