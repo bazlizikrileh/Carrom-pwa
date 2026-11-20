@@ -1,6 +1,6 @@
 // Service worker: simpan fail app supaya boleh dibuka walaupun internet lemah.
 // Tukar VERSION setiap kali fail app berubah supaya pengguna dapat versi baharu.
-const VERSION = 'c1.4.0';
+const VERSION = 'c1.4.1';
 const CACHE = `carrom-${VERSION}`;
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'engine.js', 'store.js',
   'draw-anim.js', 'cloud.js', 'live.js', 'draw-video.js', 'recap-video.js', 'sound.js', './vendor/mp4-muxer.js', 'poster.js', 'reg-poster.js', 'poster-kit.js', './vendor/qrcode.js', 'push.js', 'carrom-art.js', 'carrom-poster.js', 'img/board-top.webp', 'img/board-angle.webp', 'img/coins-close.webp', 'push-config.js', 'firebase-config.js', 'manifest.webmanifest', 'logos/kskpkpjb.webp', 'logos/ksas.webp', 'icons/cr-192.png', 'icons/cr-512.png', 'icons/cr-apple-180.png'];

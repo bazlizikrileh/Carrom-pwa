@@ -5,7 +5,9 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.4.0';
+const VERSION = 'C1.4.1';
+// Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
+const buzz = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -1234,6 +1236,7 @@ function viewMatch(t, mid) {
   $app.querySelectorAll('[data-lu]').forEach(x => (x.onchange = () => upd()));
   // butang pemenang game: isi [1,0] / [0,1]; game selepas perlawanan tamat dikosongkan
   $app.querySelectorAll('[data-g]').forEach(b => (b.onclick = () => {
+    buzz(15);
     const [ri, k, j] = b.dataset.g.split('|').map(Number);
     const inp = s2 => $app.querySelector(`[data-r="${ri}"][data-i="${k}"][data-s="${s2}"]`);
     const cur = inp(0).value !== '' && (+inp(0).value > +inp(1).value) === (j === 0);
@@ -1265,7 +1268,7 @@ function viewMatch(t, mid) {
       await cloud.submitScore(t.id, { pin, matchId: m.id, a: m.a, b: m.b, rubbers: rs, lineup: readLineup(), by, role });
       PUSH.send(['adm:' + t.id], '🔔 Skor menunggu pengesahan', `${E.matchCode(m)} · ${E.pname(t, m.a)} lwn ${E.pname(t, m.b)} · oleh ${by || '-'}`, `#/t/${t.id}/keputusan`, 'pend-' + t.id);
       ls.set('carrom:sent:' + m.id, '1');
-      toast('📤 Dihantar. Menunggu pengesahan penganjur.', 3500);
+      buzz([30, 60, 30]); toast('📤 Dihantar. Menunggu pengesahan penganjur.', 3500);
       viewMatch(t, mid);
     } catch (err) {
       send.disabled = false;
@@ -1280,7 +1283,7 @@ function viewMatch(t, mid) {
     E.planSchedule(t); LV.afterScore(t);
     save(t); ls.set(dkey, null); ls.set('carrom:sent:' + m.id, null);
     const r = E.evaluateMatch(t, m);
-    toast(m.status === 'done' ? (r.draw ? 'Disimpan · Seri' : `Disimpan · ${E.pname(t, m.winner)} menang`) : 'Disimpan (belum tamat)');
+    buzz([30, 60, 30]); toast(m.status === 'done' ? (r.draw ? 'Disimpan · Seri' : `Disimpan · ${E.pname(t, m.winner)} menang`) : 'Disimpan (belum tamat)');
     location.hash = `#/t/${t.id}/${_back}`;
   };
   const wa = document.getElementById('wa');
