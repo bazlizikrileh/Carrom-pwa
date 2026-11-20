@@ -486,13 +486,16 @@ export const byeReceivers = (t, entrants) => {
   return tiers.flat().slice(0, byes).map(e => e.id);
 };
 
+// Cermin: johan kumpulan berselang-seli bahagian atas/bawah (A atas, B bawah, C atas …), setiap johan lwn naib johan kumpulan cermin.
+// 8 kumpulan → atas: A1–H2, C1–F2, E1–D2, G1–B2 · bawah: B1–G2, D1–E2, F1–C2, H1–A2. A1 & B1 (dan A1 & A2) hanya bertemu di final.
+const altOrder = n => [...Array.from({ length: n }, (_, i) => i).filter(i => i % 2 === 0), ...Array.from({ length: n }, (_, i) => i).filter(i => i % 2 === 1)];
 export function mainSlots(t) {
   if (t.format === 'ko') {
     const ids = shuffle(t.participants.map(p => p.id));
     return bracketOrder(nextPow2(ids.length)).map(s => ids[s - 1] || 'BYE');
   }
   const G = t.groups;
-  if (t.koMode !== 'U' && canMirror(t)) return G.flatMap((g, i) => [`P:${g.name}:1`, `P:${G[G.length - 1 - i].name}:2`]);
+  if (t.koMode !== 'U' && canMirror(t)) return altOrder(G.length).flatMap(i => [`P:${G[i].name}:1`, `P:${G[G.length - 1 - i].name}:2`]);
   return drawBracket(t, koQualifiers(t));
 }
 
@@ -505,8 +508,8 @@ export function poolSlots(t) {
   const ent = poolMirror(t) ? [1, 2] : poolEntrants(t);
   if (ent.length < 2) return null;
   if (t.poolMode !== 'U' && canMirror(t)) {
-    if (t.pool === '3' && full(3)) return G.slice(0, G.length / 2).flatMap((g, i) => [`P:${g.name}:3`, `P:${G[G.length - 1 - i].name}:3`]);
-    if (t.pool === '34' && full(4)) return G.flatMap((g, i) => [`P:${g.name}:3`, `P:${G[G.length - 1 - i].name}:4`]);
+    if (t.pool === '3' && full(3)) return altOrder(G.length / 2).flatMap(i => [`P:${G[i].name}:3`, `P:${G[G.length - 1 - i].name}:3`]);
+    if (t.pool === '34' && full(4)) return altOrder(G.length).flatMap(i => [`P:${G[i].name}:3`, `P:${G[G.length - 1 - i].name}:4`]);
   }
   return drawBracket(t, ent);
 }
