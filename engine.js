@@ -677,6 +677,8 @@ export function playerStats(t, id) {
 // Tempat = pusingan terakhir dicapai (kalah mati, kemudian pool, kemudian peringkat kumpulan).
 // Dalam Tempat sama: (a), (b), purata beza mata; kemudian naik bersemuka kumpulan (†).
 export function finalRanking(t) {
+  // kalah mati belum tamat (cth. kumpulan selesai tetapi KO belum dijana) → tiada ranking akhir lagi
+  if (!isMixer(t) && t.format !== 'rr' && t.stage !== 'done') return [];
   if (isMixer(t)) return mixStandings(t).map((r, i) => ({ place: i + 1, ids: [r.id], label: 'Individu', rows: [{ id: r.id, label: i === 0 ? 'Juara individu' : `#${i + 1}`, bumped: false, st: { ...r, a: 0, b: 0, c: 0 } }] }));
   if (t.format === 'rr') {
     const s = t.groups[0] ? groupStandings(t, t.groups[0].name) : [];

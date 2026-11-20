@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.5.3';
+const VERSION = 'C1.5.4';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -3152,7 +3152,8 @@ function reportBody(t, played, resTable) {
   const d = t.date ? new Date(t.date + 'T00:00') : null;
   const dateTxt = d && !isNaN(d) ? `${HARI[d.getDay()]}, ${fmtDate(t.date)}` : (t.date || '-');
   const allDone = t.matches.length && t.matches.every(m => m.status === 'done' || m.status === 'bye');
-  const R = allDone && !E.isMixer(t) ? E.finalRanking(t) : [];
+  // podium hanya bila pertandingan benar-benar tamat (bukan sekadar semua perlawanan kumpulan selesai sebelum KO dijana)
+  const R = allDone && t.stage === 'done' && !E.isMixer(t) ? E.finalRanking(t) : [];
   const at = p => (R.find(x => x.place === p) || { ids: [] }).ids;
   const pod = [[1, '🥇', 'Johan'], [2, '🥈', 'Naib johan'], [3, '🥉', at(3).length > 1 ? 'Tempat ketiga (bersama)' : 'Tempat ketiga']].filter(([p]) => at(p).length);
   const info = [['Tarikh', dateTxt + (t.startTime ? ` · ${E.sessionTime(t, 1)}` : '')], ['Tempat', t.venueName || '-'], ['Kategori', ENTRY_ALL[t.entryMode] || '-'], ['Format', FORMAT[t.format] || '-'],
