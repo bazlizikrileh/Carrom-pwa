@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.2.0';
+const VERSION = 'C1.2.1';
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -579,15 +579,18 @@ function settingsFormAll(t, locked) {
       <div><label>Bilangan papan carrom</label><select name="numTables">${tbOpts(t)}</select></div>
     </div>
 
+    <div class="section-title">Maklumat pertandingan</div>
+    <div class="grid2"><div><label>Yuran</label><input name="regFee" value="${esc(t.regFee || '')}" placeholder="cth. Percuma / RM10"></div>
+    <div><label>Had peserta</label><input name="regMax" maxlength="30" value="${esc(t.regMaxText || (t.regMax ? String(t.regMax) : ''))}" placeholder="cth. 32 / tiada had"></div></div>
+    <label>Hadiah (satu baris setiap tempat)</label><textarea name="prizes" rows="3" placeholder="Johan: RM100 + piala&#10;Naib johan: RM50&#10;Ketiga: Hadiah saguhati">${esc(t.prizes || '')}</textarea>
+    <label>Catatan</label><textarea name="regNote" rows="3" placeholder="cth. Terbuka untuk semua ahli KSAS">${esc(t.regNote || '')}</textarea>
+    <label>Syarat penyertaan (pilihan)</label><textarea name="regCond" maxlength="600" rows="3" placeholder="cth. Ahli KSAS sahaja. Boleh tulis beberapa baris.">${esc(t.regCond || '')}</textarea>
+    <p class="muted small" style="margin:4px 0 0">Dipapar pada halaman pertandingan, poster dan mesej WhatsApp.</p>
+
     <div class="section-title">Pendaftaran peserta</div>
     <label class="check"><input type="checkbox" name="regOpen" ${t.regOpen ? 'checked' : ''}> Buka pendaftaran melalui pautan</label>
     ${t.regOpen && !regOn(t) ? '<p class="notice small" style="margin:4px 0 8px">🔒 Pendaftaran ditutup secara automatik kerana jadual telah dijana. Reset jadual untuk membukanya semula.</p>' : ''}
     <div data-show="reg">
-      <div class="grid2"><div><label>Yuran</label><input name="regFee" value="${esc(t.regFee || '')}" placeholder="cth. Percuma / RM10"></div>
-      <div><label>Had peserta</label><input name="regMax" maxlength="30" value="${esc(t.regMaxText || (t.regMax ? String(t.regMax) : ''))}" placeholder="cth. 16 / tiada had"></div></div>
-      <label>Hadiah (satu baris setiap tempat)</label><textarea name="prizes" rows="3" placeholder="Johan: RM100 + piala&#10;Naib johan: RM50&#10;Ketiga: Hadiah saguhati">${esc(t.prizes || '')}</textarea>
-      <label>Catatan</label><textarea name="regNote" rows="3" placeholder="cth. Terbuka untuk semua ahli KSAS">${esc(t.regNote || '')}</textarea>
-      <label>Syarat penyertaan (pilihan)</label><textarea name="regCond" maxlength="600" rows="3" placeholder="cth. Wanita sahaja / Staf HSAJB sahaja. Boleh tulis beberapa baris.">${esc(t.regCond || '')}</textarea>
       ${E.HC_SCHEMES[t.hcMode] ? `<label>Tahap dibenarkan</label><div class="lv-allow">${E.HC_SCHEMES[t.hcMode].levels.map(l => `<label class="check"><input type="checkbox" name="regLv" value="${l[0]}" ${!(t.regLevels || []).length || t.regLevels.includes(l[0]) ? 'checked' : ''}> ${esc(l[1])}</label>`).join('')}</div><p class="muted small" style="margin-top:0">Tanda semua = terbuka kepada semua tahap.</p>` : ''}
     </div>
 
@@ -1042,6 +1045,16 @@ function wirePending(t, root = $app) {
 // ---------- Jadual ----------
 let jsel = null, jses = 'ALL', jst = 'belum';
 // Penerangan format set yang mudah difahami
+// Kad maklumat pertandingan (yuran, hadiah, catatan, syarat) — dipapar walaupun pendaftaran ditutup
+function infoCard(t) {
+  const prizes = (t.prizes || '').split('\n').map(x => x.trim()).filter(Boolean);
+  if (!t.regFee && !prizes.length && !t.regNote && !t.regCond) return '';
+  return `<div class="section-title">ℹ️ Maklumat pertandingan</div><div class="card">
+    ${t.regFee ? `<p style="margin:0 0 8px">💳 <b>Yuran:</b> ${esc(t.regFee)}</p>` : ''}
+    ${prizes.length ? `<div class="d-prize" style="margin-bottom:8px">${prizes.map((p, i) => `<div><span>${['🥇', '🥈', '🥉'][i] || '🏅'}</span>${esc(p)}</div>`).join('')}</div>` : ''}
+    ${t.regNote ? `<p style="margin:0 0 8px;white-space:pre-line">📝 ${esc(t.regNote)}</p>` : ''}
+    ${t.regCond ? `<p class="small" style="margin:0;white-space:pre-line"><b>⚠️ Syarat penyertaan:</b><br>${esc(t.regCond)}</p>` : ''}</div>`;
+}
 const setRuleTxt = t => 'Keputusan sahaja (siapa menang setiap game). Warna buah diundi dan bertukar setiap game';
 // Tanda game: warna yang menang setiap game (⚪ Putih/Coklat, ⚫ Hitam)
 const CDOT = { w: '⚪', k: '⚫' };
@@ -2054,7 +2067,7 @@ function viewInfo(t) {
       <tr><td>Set</td><td>${esc(f[t.groupFormat].label)}${t.format === 'group_ko' ? ' · Kalah mati: ' + esc(f[t.koFormat].label) : ''}</td></tr>
       ${t.format === 'group_ko' ? `<tr><td>Pool kalah</td><td>${esc(POOL[t.pool])}</td></tr>` : ''}
     </table></div>
-    <div class="section-title">📜 Peraturan</div>${rulesHtml(t)}
+    ${infoCard(t)}<div class="section-title">📜 Peraturan</div>${rulesHtml(t)}
     <p class="muted small">Penganjur: tekan <b>Log masuk</b> di atas untuk mengurus pertandingan ini.</p>`;
 }
 
