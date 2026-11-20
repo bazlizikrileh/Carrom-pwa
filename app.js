@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.4.2';
+const VERSION = 'C1.5.0';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -1158,9 +1158,9 @@ function viewMatch(t, mid) {
     if (!h) return '';
     if (h.pending) return '<div class="hc-r warn">Handicap dikira selepas pemain dipilih.</div>';
     if (h.missing) return '<div class="hc-r warn">⚠️ Ada pemain belum ditetapkan tahap handicap (tab 👥 ' + esc(UNIT(t)) + ').</div>';
-    if (!h.n) return '<div class="hc-r">Handicap: sama (tiada mata mula)</div>';
+    if (!h.n) return '<div class="hc-r">Handicap: sama (tiada kelebihan)</div>';
     const who = team ? (h.to === m.a ? A.name : B.name) + (h.kind === 'D' ? ' (regu)' : '') : E.pname(t, h.to);
-    return `<div class="hc-r">Handicap: <b>${esc(who)}</b> mula <b>${h.n}-0</b> setiap set${h.sa != null ? ` <span class="muted">(nilai ${h.sa} lwn ${h.sb})</span>` : ''}</div>`;
+    return `<div class="hc-r">Handicap: <b>${esc(who)}</b> dapat kelebihan <b>${h.n}</b>${h.sa != null ? ` <span class="muted">(nilai ${h.sa} lwn ${h.sb})</span>` : ''}</div>`;
   };
   const rubberHtml = (r, i) => {
     const rows = Array.from({ length: f.bo }, (_, k) => (src[i] || [])[k] || ['', '']);
@@ -1491,24 +1491,27 @@ async function standingsImages(t) {
 }
 
 // ---------- Kalah mati ----------
-function bracketHtml(t, b) {
+function bracketHtml(t, b, noChamp) {
   const list = t.matches.filter(m => m.bracket === b);
   const cols = [];
   for (let r = 1; r <= t.rounds[b]; r++) {
     const ms = list.filter(m => m.round === r).sort((x, y) => x.slot - y.slot);
-    cols.push(`<div class="col"><h3>${E.roundName(t, b, r).replace('Pool: ', '')}</h3><div class="cb">${ms.map(m => {
+    const cell = m => {
       const e = E.evaluateMatch(t, m), team = E.isTeam(t);
       const has = m.rubbers.some(x => x.sets.length);
       const playable = m.a && m.b && m.a !== 'BYE' && m.b !== 'BYE';
       const line = (id, s, src) => `<div class="ln ${m.winner === id && id && id !== 'BYE' && m.status === 'done' ? 'w' : ''}"><span>${id && id !== 'BYE' ? `<span class="sd">${esc(E.seedLabel(t, id))}</span>` : ''}${id ? esc(E.pname(t, id)) : src ? `<i class="ph">${esc(E.placeholderLabel(src))}</i>` : '…'}</span><span class="s">${has ? s : ''}</span></div>`;
       const meta = playable && m.status !== 'done' && m.session ? `<div class="bmeta">${esc(E.matchCode(m))} · Sesi ${m.session} · ${esc((m.table || '').replace(/ \(.*\)/, ''))}</div>` : '';
-      const inner = line(m.a, E.tieScore(t, e)[0], m.srcA) + line(m.b, E.tieScore(t, e)[1], m.srcB) + meta;
-      return playable ? `<a class="bm" href="#/t/${t.id}/m/${m.id}">${inner}</a>` : `<div class="bm">${inner}</div>`;
-    }).join('')}</div></div>`);
+      const bo1 = E.fmtFor(t, m.stage).bo === 1, sc = k => (bo1 ? (m.status === 'done' && m.winner === (k ? m.b : m.a) ? '✓' : '') : E.tieScore(t, e)[k]);
+      const inner = line(m.a, sc(0), m.srcA) + line(m.b, sc(1), m.srcB) + meta;
+      return `<div class="sl">${playable ? `<a class="bm" href="#/t/${t.id}/m/${m.id}">${inner}</a>` : `<div class="bm">${inner}</div>`}</div>`;
+    };
+    const prs = []; for (let i = 0; i < ms.length; i += 2) prs.push(`<div class="pr${ms[i + 1] ? '' : ' one'}">${cell(ms[i])}${ms[i + 1] ? cell(ms[i + 1]) : ''}</div>`);
+    cols.push(`<div class="col"><h3>${E.roundName(t, b, r).replace('Pool: ', '')}</h3><div class="cb">${prs.join('')}</div></div>`);
   }
   const f = list.find(m => m.round === t.rounds[b]);
   const champ = f && f.status === 'done' && f.winner ? `<div class="champ">🏆 ${b === 'pool' ? 'Johan pool kalah' : 'Johan'}: ${esc(E.pname(t, f.winner))}</div>` : '';
-  return champ + `<div class="bracket">${cols.join('')}</div>`;
+  return (noChamp ? '' : champ) + `<div class="bracket">${cols.join('')}</div>`;
 }
 function viewBrackets(t) {
   if (!t.rounds.ko && !canAdmin(t)) {
@@ -1562,6 +1565,8 @@ function viewPool(t) {
 
 // ---------- Ranking ----------
 function viewRanking(t) { $app.innerHTML = rankingHtml(t); }
+const RANK_NOTE = '<b>Tempat</b> = pusingan terakhir yang dicapai (kalah mati utama, kemudian pool kalah); yang tersingkir di pusingan sama berkongsi Tempat. Dalam Tempat yang sama disusun ikut <b>(a)</b> game ±/main, kemudian <b>(b)</b> game menang/main. <b>†</b> bersemuka. Butiran penuh di bahagian Peraturan.';
+const RANK_RULE = 'Penentuan ranking akhir: Tempat ialah pusingan terakhir yang dicapai, kalah mati utama dahulu, kemudian pool kalah; yang tersingkir di pusingan yang sama berkongsi Tempat (contoh 5–8). Dalam Tempat yang sama, peserta disusun ikut (a) game ±/main = (game menang − game kalah) ÷ main, kemudian (b) game menang/main (dipaparkan hanya jika (a) sama). Main = perlawanan dimainkan (kumpulan, kalah mati dan pool; BYE tidak dikira). Bersemuka (†): jika rakan sekumpulan berada dalam Tempat yang sama, yang lebih tinggi dalam kumpulan diletakkan terus di atas rakan sekumpulannya.';
 function rankingHtml(t) {
   if (t.stage !== 'done') return `${section('Ranking', 'Ranking Peserta')}<div class="card"><p class="muted">Ranking dipaparkan selepas perlawanan akhir tamat${t.rounds.pool ? ' (dan akhir pool kalah)' : ''}.</p></div>`;
   const rank = E.finalRanking(t);
@@ -1574,14 +1579,14 @@ function rankingHtml(t) {
     ${section('Keputusan akhir', 'Ranking Peserta')}
     ${ko && ko.winner ? `<div class="champ">🏆 Johan: ${esc(E.pname(t, ko.winner))}</div>` : ''}
     <div class="card"><div class="print-only club-head">${logosHtml(t)}<div><b>${esc(t.name)}</b><br><span class="muted">${esc(clubOf(t).name)}</span></div></div>
-    <div class="tw"><table class="rank"><thead><tr><th>#</th><th>Tempat*</th><th class="l">${UNIT(t)}</th><th class="l">Pencapaian</th><th>Kump.</th><th>Main</th><th>Set</th><th>(a)</th><th>(b)</th></tr></thead><tbody>
+    <div class="tw"><table class="rank"><thead><tr><th>#</th><th>Tempat*</th><th class="l">${UNIT(t)}</th><th class="l">Pencapaian</th><th>Kump.</th><th>Main</th><th>Game</th><th>(a)</th><th>(b)</th></tr></thead><tbody>
       ${rank.map(tr => tr.rows.map(r => `<tr><td>${++n}</td><td>${tr.ids.length > 1 ? `${tr.place}–${tr.place + tr.ids.length - 1}` : tr.place}</td>
         <td class="l">${pn(t, r.id)}</td><td class="l small">${esc(r.label)}</td><td>${esc(E.seedLabel(t, r.id))}${r.bumped ? ' <span class="dag">†</span>' : ''}</td>
         <td>${r.st.p}</td><td>${r.st.sf}-${r.st.sa}</td><td>${r.st.a === 0 ? '0.00' : sign(r.st.a)}</td><td>${showB.has(r.id) ? r.st.b.toFixed(2) : ''}</td></tr>`).join('')).join('')}
     </tbody></table></div>
     <div class="foot">
       <p>* <b>Tempat:</b> pusingan terakhir yang dicapai, kalah mati utama dahulu, kemudian pool kalah. Yang tersingkir di pusingan yang sama berkongsi Tempat (contoh 5–8).</p>
-      <p><b>#:</b> dalam Tempat yang sama disusun ikut (a), kemudian (b), kemudian purata beza mata permainan setiap perlawanan.</p>
+      <p><b>#:</b> dalam Tempat yang sama disusun ikut (a), kemudian (b).</p>
       <p><b>†</b> Bersemuka: jika rakan sekumpulan berada dalam Tempat yang sama, pemain yang lebih tinggi dalam kumpulan diletakkan terus di atas rakan sekumpulannya.</p>
       <p><b>Main:</b> perlawanan dimainkan (kumpulan, kalah mati dan pool; BYE tidak dikira). <b>(a)</b> Game ±/main = (game menang − game kalah) ÷ main. <b>(b)</b> Game menang/main, dipaparkan hanya jika (a) sama. Purata = jumlah ÷ bilangan perlawanan, bukan nisbah.</p>
     </div></div>
@@ -1608,7 +1613,7 @@ function rulesOf(t) {
     rules.push(`Format perlawanan - peringkat kumpulan: ${gf}; kalah mati: ${kf}.`);
     rules.push(t.koMode !== 'U' && E.canMirror(t)
       ? 'Kalah mati (bracket cermin): johan setiap kumpulan menentang naib johan kumpulan cermin (A1 lwn naib johan kumpulan terakhir, B1 lwn kumpulan kedua terakhir, dan seterusnya). Johan kumpulan diletak berselang-seli di bahagian atas dan bawah (A atas, B bawah, C atas …), jadi A1 dan B1 hanya boleh bertemu di final. Johan dan naib johan dari kumpulan yang sama sentiasa berada di bahagian bracket berbeza.'
-      : `Kalah mati: BYE diberi kepada johan kumpulan terbaik (ikut mata, kemudian beza menang-kalah perlawanan, set dan mata permainan). Johan dan naib johan dari kumpulan yang sama diletakkan di separuh bracket berbeza.${t.bestThirds ? ` ${t.bestThirds} tempat ketiga terbaik turut layak.` : ''} Jika saiz kumpulan tidak sama, perbandingan antara kumpulan tidak mengambil kira keputusan menentang pemain tempat terakhir kumpulan yang lebih besar.`);
+      : `Kalah mati: BYE diberi kepada johan kumpulan terbaik (ikut mata, kemudian beza menang-kalah perlawanan dan game). Johan dan naib johan dari kumpulan yang sama diletakkan di separuh bracket berbeza.${t.bestThirds ? ` ${t.bestThirds} tempat ketiga terbaik turut layak.` : ''} Jika saiz kumpulan tidak sama, perbandingan antara kumpulan tidak mengambil kira keputusan menentang pemain tempat terakhir kumpulan yang lebih besar.`);
     if (t.pool !== '0') rules.push(`Pool kalah: ${t.pool === '34' ? 'peserta tempat ketiga yang tidak layak ke kalah mati utama dan semua peserta tempat keempat' : 'peserta tempat ketiga yang tidak layak ke kalah mati utama'} bermain kalah mati berasingan menggunakan format kalah mati yang sama. BYE (jika ada) diberi kepada peserta terbaik.`);
   }
   if (!E.isMixer(t)) rules.push(!E.isTeam(t) ? 'Menang: 3 mata. Kalah: 0 mata.'
@@ -1617,7 +1622,7 @@ function rulesOf(t) {
   rules.push('Warna buah: app mengundi pihak yang bermain ⚪ Putih/Coklat dan ⚫ Hitam bagi setiap perlawanan (dipapar dalam jadual). Jika terbaik 3 game, warna bertukar setiap game. Putih/Coklat memulakan game.', 'Keputusan sahaja direkod: siapa menang setiap game. Tiada skor mata.');
   if (!E.isMixer(t)) rules.push('Jika mata sama, susunan ditentukan mengikut turutan: (1) beza menang-kalah bilangan perlawanan, (2) beza menang-kalah bilangan game, (3) keputusan bersemuka (pertemuan sesama peserta yang masih sama; jika tiga atau lebih, bilangan kemenangan sesama mereka). Contoh: 5-2 (+3).');
   const HS = E.HC_SCHEMES[t.hcMode];
-  if (t.hcMode === 'manual') rules.push('Handicap (mata mula): angka dalam kurungan ialah mata yang diberi kepada pihak lawan, maksimum 10. Mata mula = beza antara angka kedua-dua pihak. Kelebihan diberi kepada pihak dengan angka lebih rendah mengikut peraturan penganjur.');
+  if (t.hcMode === 'manual') rules.push('Handicap: angka dalam kurungan (0–10) ialah nilai handicap peserta. Kelebihan diberi kepada pihak dengan angka lebih rendah, mengikut beza angka kedua-dua pihak dan peraturan penganjur.');
   else if (HS) rules.push(`Handicap ${HS.name} (mata mula setiap game). Nilai single: ${HS.levels.map(l => `${l[1]} ${l[2]}`).join(', ')}. Single: pihak bernilai rendah mula dengan beza nilai (cth. ${HS.levels[HS.levels.length - 1][1]} lwn ${HS.levels[0][1]}: mula ${HS.levels[0][2] - HS.levels[HS.levels.length - 1][2]}-0). Nilai double: ${HS.levels.map(l => `${l[1]} ${l[3]}`).join(', ')}. Double: nilai dua ahli dijumlahkan, beza maksimum ${HS.capD} mata.`);
   rules.push('Jika kaedah di atas gagal, penganjur berhak menggunakan kaedah yang difikirkan perlu dan munasabah. Keputusan penganjur adalah muktamad.');
   return rules;
@@ -2849,7 +2854,7 @@ function viewJadual(t) {
 
 // ---------- Knockout + ranking ----------
 function posterOpts(t) {
-  const c = clubOf(t), R = E.finalRanking(t), lab = { 1: 'Johan', 2: 'Naib johan', 3: 'Tempat ketiga' };
+  const c = clubOf(t), R = E.finalRanking(t), j3 = ((R.find(x => x.place === 3) || { ids: [] }).ids.length > 1), lab = { 1: 'Johan', 2: 'Naib johan', 3: j3 ? 'Tempat ketiga (bersama)' : 'Tempat ketiga' };
   const person = id => { const p = E.pobj(t, id) || {}; const mem = p.members || []; return { name: E.pname(t, id), sub: mem.length > 1 && E.usesDraw(t) ? mem.join(' · ') : '' }; };
   return { title: t.name, club: c.name || c.short, date: fmtDate(t.date), logos: c.logos,
     places: [1, 2, 3].map(pl => ({ place: pl, label: lab[pl], people: (R.find(x => x.place === pl) || { ids: [] }).ids.map(person) })).filter(p => p.people.length) };
@@ -2858,8 +2863,23 @@ function wirePoster(t) {
   const b = document.getElementById('posterBtn');
   if (b) b.onclick = async () => {
     b.disabled = true;
-    try { const m = await import('./poster.js'); const r = await m.sharePoster(posterOpts(t)); if (r === 'download') toast('Poster dimuat turun ke telefon'); }
-    catch (e) { toast('Gagal: ' + (e.message || e)); }
+    // jana dahulu, kemudian kongsi dengan tekanan baharu (share() perlukan tekanan pengguna yang masih segar)
+    const md = document.getElementById('modal');
+    md.innerHTML = `<div class="sheet"><div class="row" style="justify-content:space-between"><h3 style="margin:0">🏆 Poster juara</h3><button class="pill-btn light small" id="mx">✕</button></div>
+      <div class="rp-box" id="pjBox"><p class="muted">Menjana…</p></div></div>`;
+    md.hidden = false; md.onclick = e => { if (e.target === md || e.target.id === 'mx') md.hidden = true; };
+    try {
+      const m = await import('./poster.js'), o = posterOpts(t);
+      const blob = await m.makePoster(o), name = `Juara-${(o.title || 'pertandingan').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-')}.png`;
+      const file = new File([blob], name, { type: 'image/png' }), canSh = !!(navigator.canShare && navigator.canShare({ files: [file] }));
+      document.getElementById('pjBox').innerHTML = `<img src="${URL.createObjectURL(blob)}" class="rp-img" alt="Poster juara"><div class="btn-stack" style="margin-top:10px">
+        ${canSh ? '<button class="pill-btn" id="pjWa" style="background:#25d366;color:#fff"><span class="dot" style="background:#fff"></span>💬 Kongsi ke WhatsApp</button>' : ''}
+        <button class="pill-btn light" id="pjDl">⬇️ Muat turun</button></div>
+        ${canSh ? '<p class="muted small" style="margin:8px 0 0">Pilih <b>WhatsApp</b> dalam senarai kongsi, kemudian pilih group.</p>' : ''}`;
+      const sh = document.getElementById('pjWa');
+      if (sh) sh.onclick = () => navigator.share({ files: [file], title: o.title, text: `🏆 Keputusan ${o.title}` }).catch(e => { if (!e || e.name !== 'AbortError') toast('Tidak dapat dikongsi. Cuba Muat turun.'); });
+      document.getElementById('pjDl').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); toast('Poster dimuat turun ke telefon'); };
+    } catch (e) { document.getElementById('pjBox').innerHTML = `<p>Gagal: ${esc(e.message || String(e))}</p>`; }
     b.disabled = false;
   };
 }
@@ -3045,8 +3065,8 @@ function wireRecap(t) {
     const RD = recapData(t); RD.style = tpl;
     const logos = await Promise.all((RD.logos || []).map(src => new Promise(r => { const im = new Image(); im.onload = () => r(im); im.onerror = () => r(null); im.src = src; })));
     const md = document.getElementById('modal');
-    md.innerHTML = `<div class="sheet" style="text-align:center"><div class="row" style="justify-content:space-between"><b id="pvT"></b><button class="pill-btn light small" id="mx">✕</button></div>
-      <canvas id="pvC" style="width:min(270px,70vw);aspect-ratio:9/16;border-radius:14px;margin-top:8px;background:#0a0f1d"></canvas>
+    md.innerHTML = `<div class="sheet" style="text-align:center;max-height:92dvh;overflow:auto;padding-top:10px;padding-bottom:10px"><div class="row" style="justify-content:space-between"><b id="pvT"></b><button class="pill-btn light small" id="mx">✕</button></div>
+      <canvas id="pvC" style="height:min(480px, calc(92dvh - 200px));width:auto;max-width:80vw;aspect-ratio:9/16;border-radius:14px;margin-top:8px;background:#0a0f1d;display:block;margin-left:auto;margin-right:auto"></canvas>
       <div class="row" style="gap:6px;justify-content:center;margin-top:8px;flex-wrap:wrap"><button class="pill-btn light small" id="pvO">🎨 Gaya lain</button><button class="pill-btn light small" id="pvM">🎵 Lagu lain</button><button class="pill-btn brand small" id="pvU">✅ Guna ini</button></div>
       <p class="muted small" style="margin:6px 0 0">Pratonton pembukaan & angka sahaja. Babak lain sama untuk semua gaya.</p></div>`;
     md.hidden = false;
@@ -3121,25 +3141,15 @@ function reportBody(t, played, resTable) {
   const allDone = t.matches.length && t.matches.every(m => m.status === 'done' || m.status === 'bye');
   const R = allDone && !E.isMixer(t) ? E.finalRanking(t) : [];
   const at = p => (R.find(x => x.place === p) || { ids: [] }).ids;
-  const pod = [[1, '🥇', 'Johan'], [2, '🥈', 'Naib johan'], [3, '🥉', 'Tempat ketiga']].filter(([p]) => at(p).length);
+  const pod = [[1, '🥇', 'Johan'], [2, '🥈', 'Naib johan'], [3, '🥉', at(3).length > 1 ? 'Tempat ketiga (bersama)' : 'Tempat ketiga']].filter(([p]) => at(p).length);
   const info = [['Tarikh', dateTxt + (t.startTime ? ` · ${E.sessionTime(t, 1)}` : '')], ['Tempat', t.venueName || '-'], ['Kategori', ENTRY_ALL[t.entryMode] || '-'], ['Format', FORMAT[t.format] || '-'],
     ['Game', `Kumpulan: ${F[t.groupFormat].label}${t.format === 'group_ko' ? ` · KO: ${F[t.koFormat].label}` : ''}`], ['Peserta', `${t.participants.length} ${UNIT(t).toLowerCase()}`],
     ['Perlawanan', `${played.length} dimainkan`], ['Papan', `${E.numTablesOf(t)}${t.hcMode === 'manual' ? ' · Handicap' : ''}`]];
-  // carta kalah mati: lajur ikut pusingan
+  // carta kalah mati/pool: komponen bracket yang sama dengan tab Knockout (garis penyambung, lebar penuh)
   const chart = b => {
-    const RN = t.rounds[b]; if (!RN) return '';
-    const cols = [];
-    for (let r = 1; r <= RN; r++) {
-      const ms = t.matches.filter(m => m.bracket === b && m.round === r).sort((x, y) => x.slot - y.slot);
-      cols.push(`<div class="bk-col"><div class="bk-rn">${esc(E.roundName(t, b, r))}</div><div class="bk-ms">${ms.map(m => {
-        const ev = m.status === 'done' ? E.tieScore(t, E.evaluateMatch(t, m)) : null;
-        const row = (id, k) => { const bye = id === 'BYE', w = m.winner && m.winner === id && !bye;
-          return `<div class="bk-p ${w ? 'w' : ''} ${bye ? 'bye' : ''}"><span>${id ? (bye ? 'BYE' : nm(id)) : '—'}</span><b>${ev && E.fmtFor(t, m.stage).bo > 1 ? ev[k] : w ? '✓' : ''}</b></div>`; };
-        return `<div class="bk-m">${row(m.a, 0)}${row(m.b, 1)}</div>`; }).join('')}</div></div>`);
-    }
-    const champ = t.matches.find(m => m.bracket === b && m.round === RN);
-    cols.push(`<div class="bk-col bk-win"><div class="bk-rn">${b === 'ko' ? 'Johan' : 'Juara pool'}</div><div class="bk-ms"><div class="bk-m"><div class="bk-p w"><span>🏆 ${champ && champ.winner ? nm(champ.winner) : '—'}</span></div></div></div></div>`);
-    return `<section class="rpx-sec"><h3>${b === 'ko' ? 'Carta Kalah Mati' : 'Carta Pool Kalah'}</h3><div class="bk bk-${RN}">${cols.join('')}</div></section>`;
+    if (!t.rounds[b]) return '';
+    const fm = t.matches.find(m => m.bracket === b && m.round === t.rounds[b]);
+    return `<section class="rpx-sec rp-bk"><h3>${b === 'ko' ? 'Carta Kalah Mati' : 'Carta Pool Kalah'}</h3>${bracketHtml(t, b, true)}${fm && fm.winner ? `<p class="rpx-champ">🏆 ${b === 'ko' ? 'Johan' : 'Johan pool kalah'}: <b>${nm(fm.winner)}</b></p>` : ''}</section>`;
   };
   const sec = (h, inner, cls = '') => inner ? `<section class="rpx-sec ${cls}"><h3>${h}</h3>${inner}</section>` : '';
   const G = t.groups, isRR = t.format === 'rr';
@@ -3152,10 +3162,10 @@ function reportBody(t, played, resTable) {
     ${G.length ? sec(isRR ? 'Kedudukan Liga' : 'Kedudukan Kumpulan', `<div class="rpx-grid">${G.map(g => `<div class="rpx-blk"><h4>${isRR ? 'Liga' : 'Kumpulan ' + esc(g.name)}</h4>${standingsTable(t, g)}</div>`).join('')}</div><p class="rpx-note">Baris berlorek = layak ke kalah mati${t.pool !== '0' && !isRR ? ' / pool kalah' : ''}. Mata: menang 3, kalah 0.</p>`) : ''}
     ${!E.isMixer(t) && G.length && played.some(m => m.stage === 'group') ? sec('Matriks Keputusan', `<div class="rpx-grid">${G.map(g => `<div class="rpx-blk mx-mat"><h4>${isRR ? 'Liga' : 'Kumpulan ' + esc(g.name)}</h4>${matrixHtml(t, g).replace(/<p class="muted small">[^]*?<\/p>$/, '')}</div>`).join('')}</div><p class="rpx-note">Baca mengikut baris: game dimenangi ${UNIT(t).toLowerCase()} di baris itu menentang ${UNIT(t).toLowerCase()} di lajur. Hijau = menang.</p>`) : ''}
     ${chart('ko')}${chart('pool')}
-    ${t.stage === 'done' && t.format !== 'rr' ? sec('Ranking Akhir', rankingHtml(t).replace(/^[^]*?<div class="tw">/, '<div class="tw">').replace(/<div class="champ">[^]*?<\/div>/, '').replace(/<button[^>]*>Cetak<\/button>/, ''), 'pb') : ''}
+    ${t.stage === 'done' && t.format !== 'rr' ? sec('Ranking Akhir', rankingHtml(t).replace(/^[^]*?<div class="tw">/, '<div class="tw">').replace(/<div class="foot">[^]*$/, `<p class="rpx-note">* ${RANK_NOTE}</p>`), 'pb') : ''}
     ${G.length ? sec(`Keputusan Peringkat ${isRR ? 'Liga' : 'Kumpulan'}`, G.map(g => { const ms = played.filter(m => m.stage === 'group' && m.group === g.name).sort((x, y) => x.gn - y.gn); return ms.length ? `<div class="rpx-blk"><h4>${isRR ? 'Liga' : 'Kumpulan ' + esc(g.name)}</h4>${resultsBy(ms)}</div>` : ''; }).join(''), 'pb') : ''}
-    ${['ko', 'pool'].map(b => { const ms = played.filter(m => m.bracket === b).sort((x, y) => x.round - y.round || x.slot - y.slot); return ms.length ? sec(b === 'ko' ? 'Keputusan Kalah Mati' : 'Keputusan Pool Kalah', resultsBy(ms)) : ''; }).join('')}
-    <section class="rpx-sec pb"><h3>Peraturan &amp; Penentuan Kedudukan</h3><ol class="rules small rpx-rules">${rulesOf(t).map(r => `<li>${esc(r)}</li>`).join('')}</ol>
+    ${['ko', 'pool'].map(b => { let h = ''; for (let r = 1; r <= (t.rounds[b] || 0); r++) { const ms = played.filter(m => m.bracket === b && m.round === r).sort((x, y) => x.slot - y.slot); if (ms.length) h += `<div class="rpx-blk"><h4>${esc(E.roundName(t, b, r))}</h4>${resultsBy(ms)}</div>`; } return h ? sec(b === 'ko' ? 'Keputusan Kalah Mati' : 'Keputusan Pool Kalah', h) : ''; }).join('')}
+    <section class="rpx-sec pb"><h3>Peraturan &amp; Penentuan Kedudukan</h3><ol class="rules small rpx-rules">${[...rulesOf(t), ...(t.stage === 'done' && t.format !== 'rr' && !E.isMixer(t) ? [RANK_RULE] : [])].map(r => `<li>${esc(r)}</li>`).join('')}</ol>
       <div class="rp-sign"><div><div class="ln"></div>Disediakan oleh<br><small>Nama: ${esc((t.createdBy && t.createdBy.name) || '')}</small></div><div><div class="ln"></div>Disahkan oleh<br><small>Penganjur / Pengurus pertandingan</small></div></div></section>
     <p class="muted small rp-foot">Dijana oleh Carrom Portal · ${new Date().toLocaleString('ms-MY')}</p></div>`;
 }
