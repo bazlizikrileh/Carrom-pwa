@@ -131,9 +131,10 @@ const D = {
     const t = fitTitle(c, d.title.toUpperCase(), W - 200, 220, 2, 104);
     F(c, t.s, 900, COND); c.fillStyle = '#1d120a'; t.ls.forEach((l, i) => c.fillText(l, 96, cy + 92 + t.s * .9 + i * t.s * .95));
     let y = cy + 110 + t.ls.length * t.s * .95 + 20;
-    F(c, 24, 700, COND); c.fillStyle = 'rgba(29,18,10,.65)'; c.fillText(fmtLine(d).toUpperCase(), 100, y); y += 56;
-    const qs = 220, gy = factsGrid(c, d, 100, y, W - 200 - qs - 40, '#1d120a', T.accDark, 2, 30);
-    prizes(c, d, 100, gy + 60, W - 200 - qs - 40, '#1d120a', T.acc, 24, 2);
+    const qs = 220, colW = W - 200 - qs - 40;
+    F(c, 22, 700, COND); c.fillStyle = 'rgba(29,18,10,.65)'; wrap(c, fmtLine(d).toUpperCase(), W - 200, 2).forEach(l => { c.fillText(l, 100, y); y += 30; }); y += 30;
+    const gy = factsGrid(c, d, 100, y, colW, '#1d120a', T.accDark, 2, 30);
+    if (gy + 60 < H - 110) prizes(c, d, 100, gy + 60, colW, '#1d120a', T.acc, 24, Math.max(1, Math.min(2, Math.floor((H - 110 - gy - 40) / 35))));
     qrCard(c, d, W - 100 - qs, H - 100 - qs - 52, qs, { bg: '#fff', label: ctaText(d) });
   },
   // 3 · Buah dekat: foto buah penuh, tirai gelap pepenjuru, tajuk gergasi
