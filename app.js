@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.3.0';
+const VERSION = 'C1.4.0';
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -1317,9 +1317,9 @@ function standingsTable(t, g) {
   const poolN = t.format === 'group_ko' ? (t.pool === '34' ? 2 : t.pool === '3' ? 1 : 0) : 0;
   const s = E.groupStandings(t, g.name), team = E.isTeam(t);
   const sign = n => (n > 0 ? '+' : '') + n;
-  return `<div class="tw"><table><thead><tr><th>#</th><th class="l">${UNIT(t)}</th><th>P</th><th>M</th>${team ? '<th>S</th>' : ''}<th>K</th><th>Mata</th><th>Game ±</th><th>Main ±</th></tr></thead>
+  return `<div class="tw"><table><thead><tr><th>#</th><th class="l">${UNIT(t)}</th><th>P</th><th>M</th>${team ? '<th>S</th>' : ''}<th>K</th><th>Mata</th><th>Game ±</th></tr></thead>
     <tbody>${s.map((r, i) => `<tr class="${i < q ? 'q' : i < q + poolN ? 'pq' : ''}"><td>${i + 1}</td><td class="l">${E.usesDraw(t) ? pnUnit(t, r.id) : pn(t, r.id)}</td>
-      <td>${r.p}</td><td>${r.w}</td>${team ? `<td>${r.d}</td>` : ''}<td>${r.l}</td><td><b>${r.pts}</b></td><td>${sign(r.sf - r.sa)}</td><td>${sign(r.pf - r.pa)}</td></tr>`).join('')}</tbody></table></div>`;
+      <td>${r.p}</td><td>${r.w}</td>${team ? `<td>${r.d}</td>` : ''}<td>${r.l}</td><td><b>${r.pts}</b></td><td>${sign(r.sf - r.sa)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function matrixHtml(t, g) {
   const M = E.matrix(t, g.name), st = E.groupStandings(t, g.name);
@@ -3019,10 +3019,9 @@ function recapData(t) {
 }
 function recapCard(t) {
   if (!t.matches.some(m => m.status === 'done')) return '';
-  return `<div class="card noprint"><b>🎬 Video ringkasan</b><p class="muted small" style="margin:4px 0 8px">Video menegak (~40 saat) berserta muzik: angka, kedudukan, detik menarik, kalah mati dan podium. Dijana dalam telefon ini.</p>
+  return `<div class="card noprint"><b>🎬 Video ringkasan</b><p class="muted small" style="margin:4px 0 8px">Video menegak (~40 saat) berserta muzik: angka, kedudukan, kalah mati dan podium. Dijana dalam telefon ini.</p>
     <div class="grid2"><div><label style="margin-top:0">🎨 Gaya pembukaan</label><select id="rcOpen"><option value="">🎲 Rawak</option></select></div>
       <div><label style="margin-top:0">🎵 Muzik</label><select id="rcSty"><option value="">🎲 Rawak</option></select></div></div>
-    <label class="check" style="margin:8px 0"><input type="checkbox" id="rcAw" ${ls.get('carrom:rcAw') === '0' ? '' : 'checked'}> <span>Sertakan <b>detik menarik</b> <small class="muted">(jika tidak, matriks kumpulan dipapar lebih lama)</small></span></label>
     <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center">
     <button type="button" class="pill-btn light small" id="rcPv">👁️ Pratonton</button>
     <button type="button" class="pill-btn brand small" id="rcGo"><span class="dot"></span>🎬 Jana video</button></div>
@@ -3031,10 +3030,9 @@ function recapCard(t) {
 function wireRecap(t) {
   const go = document.getElementById('rcGo'); if (!go) return;
   const sel = document.getElementById('rcSty'), msg = document.getElementById('rcMsg'), out = document.getElementById('rcOut');
-  const op = document.getElementById('rcOpen'), awc = document.getElementById('rcAw');
+  const op = document.getElementById('rcOpen');
   import('./recap-video.js').then(R => { op.insertAdjacentHTML('beforeend', R.OPEN_NAMES.map((n, i) => `<option value="${i}">${i + 1}. ${esc(n)}</option>`).join('')); op.value = ls.get('carrom:rcOpen') || ''; });
   op.onchange = () => ls.set('carrom:rcOpen', op.value || null);
-  awc.onchange = () => ls.set('carrom:rcAw', awc.checked ? null : '0');
   import('./sound.js').then(S => { sel.insertAdjacentHTML('beforeend', S.RECAP.map(([i, x]) => `<option value="${i}">🎵 ${esc(x.name)}</option>`).join('')); try { sel.value = ls.get('carrom:rcSty') || ''; } catch {} });
   sel.onchange = () => ls.set('carrom:rcSty', sel.value || null);
   // 👁️ Pratonton: main babak pembukaan + angka secara langsung di skrin dengan muzik pilihan (tanpa menjana video)
@@ -3078,7 +3076,7 @@ function wireRecap(t) {
     try {
       const [{ buildRecap }, V, S] = await Promise.all([import('./recap-video.js'), import('./draw-video.js'), import('./sound.js')]);
       const RD = recapData(t), tpl = op.value !== '' ? +op.value : Math.floor(Math.random() * 10);
-      RD.style = tpl; RD.noAwards = !awc.checked;
+      RD.style = tpl; RD.noAwards = true;   // carrom: tiada detik menarik
       const R = buildRecap(RD), style = sel.value !== '' ? +sel.value : S.RECAP[Math.floor(Math.random() * S.RECAP.length)][0];
       const made = await V.prepareDrawVideo({ custom: R, logos: recapData(t).logos, music: true, musicStyle: style, title: `Ringkasan ${t.name}`, subtitle: '' }, (p, mode) => {
         go.textContent = mode === 'audio' ? '🎵 Menyediakan muzik…' : mode === 'shrink' ? `🗜️ Mengecilkan saiz… ${Math.round(p * 100)}%` : `⏳ ${mode === 'rec' ? 'Merakam' : 'Menyediakan'} video… ${Math.round(p * 100)}%`;
@@ -3111,6 +3109,54 @@ function resultsMessage(t) {
     `📄 Laporan penuh: ${appUrl(`t/${t.id}/laporan`)}`, '',
     allDone ? 'Tahniah kepada semua pemenang, dan terima kasih kepada semua peserta, pengadil & AJK! 🙏⚪' : '_Keputusan belum muktamad._'].join('\n').replace(/\n{3,}/g, '\n\n');
 }
+// ---------- Laporan bercetak (carrom) ----------
+// Susunan: kepala → maklumat → podium → kedudukan kumpulan → matriks → carta kalah mati/pool → ranking → senarai keputusan → peraturan & tandatangan
+function reportBody(t, played, resTable) {
+  const c = clubOf(t), F = E.SET_FORMATS, nm = id => esc(E.pname(t, id));
+  const d = t.date ? new Date(t.date + 'T00:00') : null;
+  const dateTxt = d && !isNaN(d) ? `${HARI[d.getDay()]}, ${fmtDate(t.date)}` : (t.date || '-');
+  const allDone = t.matches.length && t.matches.every(m => m.status === 'done' || m.status === 'bye');
+  const R = allDone && !E.isMixer(t) ? E.finalRanking(t) : [];
+  const at = p => (R.find(x => x.place === p) || { ids: [] }).ids;
+  const pod = [[1, '🥇', 'Johan'], [2, '🥈', 'Naib johan'], [3, '🥉', 'Tempat ketiga']].filter(([p]) => at(p).length);
+  const info = [['Tarikh', dateTxt + (t.startTime ? ` · ${E.sessionTime(t, 1)}` : '')], ['Tempat', t.venueName || '-'], ['Kategori', ENTRY_ALL[t.entryMode] || '-'], ['Format', FORMAT[t.format] || '-'],
+    ['Game', `Kumpulan: ${F[t.groupFormat].label}${t.format === 'group_ko' ? ` · KO: ${F[t.koFormat].label}` : ''}`], ['Peserta', `${t.participants.length} ${UNIT(t).toLowerCase()}`],
+    ['Perlawanan', `${played.length} dimainkan`], ['Papan', `${E.numTablesOf(t)}${t.hcMode === 'manual' ? ' · Handicap' : ''}`]];
+  // carta kalah mati: lajur ikut pusingan
+  const chart = b => {
+    const RN = t.rounds[b]; if (!RN) return '';
+    const cols = [];
+    for (let r = 1; r <= RN; r++) {
+      const ms = t.matches.filter(m => m.bracket === b && m.round === r).sort((x, y) => x.slot - y.slot);
+      cols.push(`<div class="bk-col"><div class="bk-rn">${esc(E.roundName(t, b, r))}</div><div class="bk-ms">${ms.map(m => {
+        const ev = m.status === 'done' ? E.tieScore(t, E.evaluateMatch(t, m)) : null;
+        const row = (id, k) => { const bye = id === 'BYE', w = m.winner && m.winner === id && !bye;
+          return `<div class="bk-p ${w ? 'w' : ''} ${bye ? 'bye' : ''}"><span>${id ? (bye ? 'BYE' : nm(id)) : '—'}</span><b>${ev && E.fmtFor(t, m.stage).bo > 1 ? ev[k] : w ? '✓' : ''}</b></div>`; };
+        return `<div class="bk-m">${row(m.a, 0)}${row(m.b, 1)}</div>`; }).join('')}</div></div>`);
+    }
+    const champ = t.matches.find(m => m.bracket === b && m.round === RN);
+    cols.push(`<div class="bk-col bk-win"><div class="bk-rn">${b === 'ko' ? 'Johan' : 'Juara pool'}</div><div class="bk-ms"><div class="bk-m"><div class="bk-p w"><span>🏆 ${champ && champ.winner ? nm(champ.winner) : '—'}</span></div></div></div></div>`);
+    return `<section class="rpx-sec"><h3>${b === 'ko' ? 'Carta Kalah Mati' : 'Carta Pool Kalah'}</h3><div class="bk bk-${RN}">${cols.join('')}</div></section>`;
+  };
+  const sec = (h, inner, cls = '') => inner ? `<section class="rpx-sec ${cls}"><h3>${h}</h3>${inner}</section>` : '';
+  const G = t.groups, isRR = t.format === 'rr';
+  const resultsBy = ms => ms.length ? resTable(ms) : '';
+  return `<div class="rpx">
+    <div class="rpx-head">${c.logos.map(x => `<img src="${esc(x)}" alt="">`).join('')}<div><div class="rpx-k">LAPORAN PERTANDINGAN CARROM</div><h2>${esc(t.name)}</h2><div class="rpx-club">${esc(c.name)}</div></div></div>
+    <div class="rpx-info">${info.map(([k, v]) => `<div><span>${k}</span><b>${esc(v)}</b></div>`).join('')}</div>
+    ${pod.length ? `<div class="rpx-pod">${pod.map(([p, ic, lb]) => `<div class="pd${p}"><div class="ic">${ic}</div><div class="lb">${lb}</div><div class="nm">${at(p).map(nm).join('<br>')}</div></div>`).join('')}</div>` : ''}
+    ${E.isMixer(t) ? mixReport(t, played, resTable) : ''}
+    ${G.length ? sec(isRR ? 'Kedudukan Liga' : 'Kedudukan Kumpulan', `<div class="rpx-grid">${G.map(g => `<div class="rpx-blk"><h4>${isRR ? 'Liga' : 'Kumpulan ' + esc(g.name)}</h4>${standingsTable(t, g)}</div>`).join('')}</div><p class="rpx-note">Baris berlorek = layak ke kalah mati${t.pool !== '0' && !isRR ? ' / pool kalah' : ''}. Mata: menang 3, kalah 0.</p>`) : ''}
+    ${!E.isMixer(t) && G.length && played.some(m => m.stage === 'group') ? sec('Matriks Keputusan', `<div class="rpx-grid">${G.map(g => `<div class="rpx-blk mx-mat"><h4>${isRR ? 'Liga' : 'Kumpulan ' + esc(g.name)}</h4>${matrixHtml(t, g).replace(/<p class="muted small">[^]*?<\/p>$/, '')}</div>`).join('')}</div><p class="rpx-note">Baca mengikut baris: game dimenangi ${UNIT(t).toLowerCase()} di baris itu menentang ${UNIT(t).toLowerCase()} di lajur. Hijau = menang.</p>`) : ''}
+    ${chart('ko')}${chart('pool')}
+    ${t.stage === 'done' && t.format !== 'rr' ? sec('Ranking Akhir', rankingHtml(t).replace(/^[^]*?<div class="tw">/, '<div class="tw">').replace(/<div class="champ">[^]*?<\/div>/, '').replace(/<button[^>]*>Cetak<\/button>/, ''), 'pb') : ''}
+    ${G.length ? sec(`Keputusan Peringkat ${isRR ? 'Liga' : 'Kumpulan'}`, G.map(g => { const ms = played.filter(m => m.stage === 'group' && m.group === g.name).sort((x, y) => x.gn - y.gn); return ms.length ? `<div class="rpx-blk"><h4>${isRR ? 'Liga' : 'Kumpulan ' + esc(g.name)}</h4>${resultsBy(ms)}</div>` : ''; }).join(''), 'pb') : ''}
+    ${['ko', 'pool'].map(b => { const ms = played.filter(m => m.bracket === b).sort((x, y) => x.round - y.round || x.slot - y.slot); return ms.length ? sec(b === 'ko' ? 'Keputusan Kalah Mati' : 'Keputusan Pool Kalah', resultsBy(ms)) : ''; }).join('')}
+    <section class="rpx-sec pb"><h3>Peraturan &amp; Penentuan Kedudukan</h3><ol class="rules small rpx-rules">${rulesOf(t).map(r => `<li>${esc(r)}</li>`).join('')}</ol>
+      <div class="rp-sign"><div><div class="ln"></div>Disediakan oleh<br><small>Nama: ${esc((t.createdBy && t.createdBy.name) || '')}</small></div><div><div class="ln"></div>Disahkan oleh<br><small>Penganjur / Pengurus pertandingan</small></div></div></section>
+    <p class="muted small rp-foot">Dijana oleh Carrom Portal · ${new Date().toLocaleString('ms-MY')}</p></div>`;
+}
+
 function viewReport(t) {
   // peserta & penonton: laporan, video & ringkasan WhatsApp hanya selepas semua perlawanan tamat
   const allDone = t.matches.length && t.matches.every(m => m.status === 'done' || m.status === 'bye');
@@ -3124,28 +3170,13 @@ function viewReport(t) {
   const c = clubOf(t), f = E.SET_FORMATS;
   const played = t.matches.filter(m => m.status === 'done' && m.a !== 'BYE' && m.b !== 'BYE');
   const resRow = m => { const r = E.evaluateMatch(t, m), team = E.isTeam(t);
-    return `<tr><td>${esc(E.matchCode(m) || '')}</td><td class="l">${m.winner === m.a ? '<b>' + esc(E.pname(t, m.a)) + '</b>' : esc(E.pname(t, m.a))}</td><td><b>${E.tieScore(t, r).join('-')}</b></td><td class="l">${m.winner === m.b ? '<b>' + esc(E.pname(t, m.b)) + '</b>' : esc(E.pname(t, m.b))}</td><td class="l small">${esc(gamesTxt(m, t))}</td></tr>`; };
-  const resTable = ms => ms.length ? `<div class="tw"><table class="rp"><thead><tr><th>Game</th><th class="l">${UNIT(t)}</th><th>Skor</th><th class="l">${UNIT(t)}</th><th class="l">Game</th></tr></thead><tbody>${ms.map(resRow).join('')}</tbody></table></div>` : '<p class="muted small">Belum ada keputusan.</p>';
+    return `<tr><td>${esc(E.matchCode(m) || '')}</td><td class="l">${m.winner === m.a ? '<b>' + esc(E.pname(t, m.a)) + '</b>' : esc(E.pname(t, m.a))}</td><td><b>${E.fmtFor(t, m.stage).bo === 1 ? (m.winner === m.a ? '◀ menang' : 'menang ▶') : E.tieScore(t, r).join('-')}</b></td><td class="l">${m.winner === m.b ? '<b>' + esc(E.pname(t, m.b)) + '</b>' : esc(E.pname(t, m.b))}</td></tr>`; };
+  const resTable = ms => ms.length ? `<div class="tw"><table class="rp"><thead><tr><th>No.</th><th class="l">${UNIT(t)}</th><th>Keputusan</th><th class="l">${UNIT(t)}</th></tr></thead><tbody>${ms.map(resRow).join('')}</tbody></table></div>` : '<p class="muted small">Belum ada keputusan.</p>';
   const ko = b => { const R = t.rounds[b]; if (!R) return ''; let h = '';
     for (let r = 1; r <= R; r++) { const ms = played.filter(m => m.bracket === b && m.round === r).sort((x, y) => x.slot - y.slot); if (ms.length) h += `<h4>${esc(E.roundName(t, b, r))}</h4>${resTable(ms)}`; }
     return h ? `<h3>${b === 'ko' ? 'Kalah Mati' : 'Pool Kalah'}</h3>${h}` : ''; };
   const final = t.matches.find(m => m.bracket === 'ko' && m.round === t.rounds.ko);
-  const body = `<div class="rp-head">${c.logos.map(s => `<img src="${esc(s)}" alt="">`).join('')}<div><h2>${esc(t.name)}</h2><div class="muted">${esc(c.name)}</div></div></div>
-    <table class="rp-info"><tr><td>Tarikh</td><td>${(() => { const d = t.date ? new Date(t.date + 'T00:00') : null; return d && !isNaN(d) ? `${HARI[d.getDay()]}, ${esc(fmtDate(t.date))}` : esc(t.date || '-'); })()}${t.startTime ? `<br><small>${esc(E.sessionTime(t, 1))} – ${esc(E.sessionTime(t, (E.lastSession(t) || 1) + 1))}</small>` : ''}</td><td>Tempat</td><td>${esc(t.venue === 'X' ? (t.venueName || '-') : E.VENUES[t.venue] || '-')}</td></tr>
-      <tr><td>Kategori</td><td>${esc(ENTRY[t.entryMode])}</td><td>Format</td><td>${esc(E.isMixer(t) ? `Penuh (pasangan sekali dengan semua) · ${E.lastSession(t)} sesi` : FORMAT[t.format])}</td></tr>
-      <tr><td>Peserta</td><td>${E.isMixer(t) ? t.individuals.length : t.participants.length} ${esc(UNIT(t).toLowerCase())}</td><td>Set</td><td>${esc(f[t.groupFormat].label)}${t.format === 'group_ko' ? ' · KO: ' + esc(f[t.koFormat].label) : ''}</td></tr>
-      <tr><td>Perlawanan</td><td>${played.length} selesai</td><td>Papan</td><td>${E.numTablesOf(t)}</td></tr></table>
-    ${podiumHtml(t) || (final && final.winner ? `<div class="champ">🏆 Johan: ${esc(E.pname(t, final.winner))}${final.a && final.b ? ` · Naib johan: ${esc(E.pname(t, final.winner === final.a ? final.b : final.a))}` : ''}</div>` : '')}
-    ${E.isMixer(t) ? mixReport(t, played, resTable) : ''}
-    ${t.groups.length ? `<h3>${t.format === 'rr' ? 'Kedudukan Liga' : 'Kedudukan Kumpulan'}</h3>${t.groups.map(g => `<h4>${t.format === 'rr' ? 'Liga' : 'Kumpulan ' + esc(g.name)}</h4>${standingsTable(t, g)}`).join('')}` : ''}
-    ${E.isMixer(t) ? '' : unitAwards(t, played)}
-    ${!E.isMixer(t) && t.groups.length && played.some(m => m.stage === 'group') ? `<section class="rp-sec pb"><h3>Matriks Keputusan</h3>${t.groups.map(g => `<div class="mx-mat"><h4>${t.format === 'rr' ? 'Liga' : 'Kumpulan ' + esc(g.name)}</h4>${matrixHtml(t, g)}</div>`).join('')}</section>` : ''}
-    ${t.groups.length ? `<section class="rp-sec pb"><h3>Keputusan Peringkat ${t.format === 'rr' ? 'Liga' : 'Kumpulan'}</h3>${t.groups.map(g => { const ms = played.filter(m => m.stage === 'group' && m.group === g.name).sort((x, y) => x.gn - y.gn); return ms.length ? `<h4>${t.format === 'rr' ? 'Liga' : 'Kumpulan ' + esc(g.name)}</h4>${resTable(ms)}` : ''; }).join('') || '<p class="muted small">Belum ada keputusan.</p>'}</section>` : ''}
-    ${ko('ko')}${ko('pool')}
-    ${t.stage === 'done' && t.format !== 'rr' ? rankingHtml(t).replace(/<button[^>]*>Cetak<\/button>/, '') : ''}
-    <section class="rp-sec pb"><h3>Peraturan &amp; Penentuan Kedudukan</h3><ol class="rules small">${rulesOf(t).map(r => `<li>${esc(r)}</li>`).join('')}</ol>
-      <div class="rp-sign"><div><div class="ln"></div>Disediakan oleh<br><small>Nama: ${esc((t.createdBy && t.createdBy.name) || '')}</small></div><div><div class="ln"></div>Disahkan oleh<br><small>Penganjur / Pengurus pertandingan</small></div></div></section>
-    <p class="muted small rp-foot">Dijana oleh Carrom Portal · ${new Date().toLocaleString('ms-MY')}</p>`;
+  const body = reportBody(t, played, resTable);
   $app.innerHTML = `${section('Laporan', 'Laporan Pertandingan')}
     <div class="card noprint"><p class="muted small" style="margin-top:0">Laporan lengkap: maklumat, kedudukan, keputusan semua perlawanan${t.rounds.ko ? ', kalah mati' : ''}${t.stage === 'done' ? ' dan ranking' : ''}. Tekan butang di bawah dan pilih <b>Simpan sebagai PDF</b>.</p>
       <button class="pill-btn brand" id="prt"><span class="dot"></span>🖨️ Cetak / Simpan PDF</button></div>
