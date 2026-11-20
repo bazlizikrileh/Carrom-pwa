@@ -10,6 +10,7 @@ const loadImg = src => imgCache[src] || (imgCache[src] = new Promise(res => { co
 
 export const STYLES = {
   malam: 'Malam kejohanan', atas: 'Papan dari atas', dekat: 'Buah dekat', kelab: 'Warna kelab', tarikh: 'Tarikh besar', klasik: 'Klasik krim',
+  majalah: 'Kulit majalah', tiket: 'Tiket', belah: 'Belah pepenjuru', ratu: 'Ratu tengah',
 };
 export const STYLE_KEYS = Object.keys(STYLES);
 
@@ -221,7 +222,89 @@ const D = {
     c.textAlign = 'left';
     qrCard(c, d, W / 2 - 90, H - f - 30 - 232, 180, { bg: '#fff', label: ctaText(d) });
   },
+  // 7 · Kulit majalah: foto papan penuh, nama "CARROM" gergasi di atas, butiran di bawah
+  async majalah(c, d, T) {
+    const im = await loadImg('img/board-top.webp');
+    cover(c, im, -120, 150, W + 240, W + 240);
+    c.fillStyle = grad(c, 0, 0, 0, H, [[0, 'rgba(14,9,6,.92)'], [.22, 'rgba(14,9,6,.25)'], [.6, 'rgba(14,9,6,.15)'], [.8, 'rgba(14,9,6,.88)'], [1, 'rgba(14,9,6,.97)']]); c.fillRect(0, 0, W, H);
+    F(c, 250, 900, COND); c.fillStyle = '#fff8ee'; c.textAlign = 'center';
+    const mw = c.measureText('CARROM').width; c.save(); c.translate(W / 2, 240); c.scale(Math.min(1, (W - 80) / mw), 1); c.fillText('CARROM', 0, 0); c.restore();
+    F(c, 22, 800, COND); c.fillStyle = T.accLight; c.fillText(`EDISI KHAS · ${(d.clubShort || '').toUpperCase()} · ${d.dateParts ? d.dateParts.day + ' ' + d.dateParts.mon + ' ' + d.dateParts.year : ''}`, W / 2, 290);
+    c.textAlign = 'left';
+    await logos(c, d, W - 70, 310, 70, 'right');
+    const t = fitTitle(c, d.title.toUpperCase(), W - 140, 230, 3, 96);
+    let y = H - 400 - t.ls.length * t.s * .95;
+    F(c, t.s, 900, COND); t.ls.forEach((l, i) => { c.fillStyle = i === t.ls.length - 1 ? T.accLight : '#fff8ee'; c.fillText(l, 66, y + t.s * .9 + i * t.s * .95); });
+    y += t.ls.length * t.s * .95 + 34;
+    F(c, 22, 700, COND); c.fillStyle = 'rgba(255,240,220,.8)'; c.fillText(fmtLine(d).toUpperCase(), 70, y); y += 46;
+    factsGrid(c, d, 70, y, 640, '#fff8ee', T.accLight, 2, 30);
+    qrCard(c, d, W - 70 - 210, H - 70 - 262, 210, { label: ctaText(d) });
+  },
+  // 8 · Tiket: kad tiket krim dengan jalur foto, keratan & kod QR di stub
+  async tiket(c, d, T) {
+    const im = await loadImg('img/coins-close.webp');
+    c.fillStyle = grad(c, 0, 0, W, H, [[0, T.c1], [1, shade(T.c1, -.5)]]); c.fillRect(0, 0, W, H);
+    c.fillStyle = 'rgba(255,255,255,.06)'; for (let i = 0; i < 14; i++) { c.beginPath(); c.arc((i * 211) % W, (i * 337) % H, 40 + (i % 4) * 30, 0, 7); c.fill(); }
+    await logos(c, d, W / 2, 60, 80, 'center');
+    const x = 80, y0 = 190, w = W - 160, h = H - 270;
+    c.save(); c.shadowColor = 'rgba(0,0,0,.4)'; c.shadowBlur = 40; c.fillStyle = '#fbf3e4'; rr(c, x, y0, w, h, 30); c.fill(); c.restore();
+    c.save(); rr(c, x, y0, w, 330, [30, 30, 0, 0]); c.clip(); cover(c, im, x, y0, w, 330, .5, .55); c.fillStyle = grad(c, 0, y0, 0, y0 + 330, [[0, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,.45)']]); c.fillRect(x, y0, w, 330); c.restore();
+    pill(c, x + 30, y0 + 260, '🎟️ TIKET MASUK · CARROM', T.acc, '#fff', 22);
+    const t = fitTitle(c, d.title.toUpperCase(), w - 80, 200, 3, 86);
+    F(c, t.s, 900, COND); c.fillStyle = '#1d120a'; t.ls.forEach((l, i) => c.fillText(l, x + 40, y0 + 370 + t.s * .9 + i * t.s * .95));
+    let y = y0 + 390 + t.ls.length * t.s * .95 + 10;
+    F(c, 22, 700, COND); c.fillStyle = T.accDark; c.fillText(fmtLine(d).toUpperCase(), x + 40, y); y += 50;
+    factsGrid(c, d, x + 40, y, w - 80, '#1d120a', T.accDark, 2, 30);
+    // keratan
+    const sy = y0 + h - 300;
+    c.fillStyle = shade(T.c1, -.25); [x, x + w].forEach(cx => { c.beginPath(); c.arc(cx, sy, 26, 0, 7); c.fill(); });
+    c.strokeStyle = 'rgba(29,18,10,.35)'; c.setLineDash([14, 12]); c.lineWidth = 3; c.beginPath(); c.moveTo(x + 40, sy); c.lineTo(x + w - 40, sy); c.stroke(); c.setLineDash([]);
+    prizes(c, d, x + 40, sy + 70, w - 360, '#1d120a', T.acc, 24, 3);
+    F(c, 20, 800, COND); c.fillStyle = 'rgba(29,18,10,.6)'; c.fillText('NO. ' + String(Math.abs([...(d.url || 'x')].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) | 0, 7)) % 100000).padStart(5, '0'), x + 40, y0 + h - 34);
+    qrCard(c, d, x + w - 40 - 210, sy + 26, 210, { bg: '#fff', label: ctaText(d) });
+  },
+  // 9 · Belah pepenjuru: foto buah di atas, warna kelab di bawah, garis pepenjuru
+  async belah(c, d, T) {
+    const im = await loadImg('img/coins-close.webp');
+    c.fillStyle = shade(T.c1, -.35); c.fillRect(0, 0, W, H);
+    c.save(); c.beginPath(); c.moveTo(0, 0); c.lineTo(W, 0); c.lineTo(W, 520); c.lineTo(0, 700); c.closePath(); c.clip(); cover(c, im, 0, 0, W, 720, .5, .4); c.restore();
+    c.fillStyle = T.acc; c.beginPath(); c.moveTo(0, 700); c.lineTo(W, 520); c.lineTo(W, 548); c.lineTo(0, 728); c.closePath(); c.fill();
+    c.fillStyle = grad(c, 0, 0, 0, 220, [[0, 'rgba(0,0,0,.6)'], [1, 'rgba(0,0,0,0)']]); c.fillRect(0, 0, W, 220);
+    await logos(c, d, 70, 56, 84);
+    const t = fitTitle(c, d.title.toUpperCase(), W - 140, 300, 3, 110);
+    F(c, t.s, 900, COND); t.ls.forEach((l, i) => { c.fillStyle = i === t.ls.length - 1 ? T.accLight : '#fff'; c.fillText(l, 66, 760 + t.s * .9 + i * t.s * .95); });
+    let y = 780 + t.ls.length * t.s * .95 + 10;
+    F(c, 22, 700, COND); c.fillStyle = 'rgba(255,255,255,.8)'; c.fillText(fmtLine(d).toUpperCase(), 70, y); y += 52;
+    const gy = factsGrid(c, d, 70, y, W - 420, '#fff', T.accLight, 2, 30);
+    if (gy + 60 < H - 60) prizes(c, d, 70, gy + 60, W - 420, '#fff', T.acc, 23, 2);
+    qrCard(c, d, W - 70 - 220, H - 70 - 272, 220, { label: ctaText(d) });
+  },
+  // 10 · Ratu tengah: bulatan susunan buah gergasi dengan cincin teks, gaya lencana
+  async ratu(c, d, T) {
+    const im = await loadImg('img/board-top.webp');
+    c.fillStyle = '#efe4cf'; c.fillRect(0, 0, W, H);
+    c.strokeStyle = 'rgba(138,74,28,.18)'; c.lineWidth = 2; for (let r = 120; r < 900; r += 46) { c.beginPath(); c.arc(W / 2, 470, r, 0, 7); c.stroke(); }
+    const R = 300;
+    c.save(); c.shadowColor = 'rgba(0,0,0,.35)'; c.shadowBlur = 40; c.shadowOffsetY = 14; c.fillStyle = '#6e3410'; c.beginPath(); c.arc(W / 2, 470, R + 26, 0, 7); c.fill(); c.restore();
+    c.save(); c.beginPath(); c.arc(W / 2, 470, R, 0, 7); c.clip(); c.drawImage(im, im.width * .34, im.height * .34, im.width * .32, im.height * .32, W / 2 - R, 470 - R, R * 2, R * 2); c.restore();
+    // teks melengkung di cincin
+    const ring = (txt, rad, start, size, col) => { F(c, size, 900, COND); c.fillStyle = col; const chars = [...txt]; const tot = chars.reduce((a, ch) => a + c.measureText(ch).width, 0) + chars.length * 4; let a = start - tot / rad / 2;
+      chars.forEach(ch => { const cw = c.measureText(ch).width + 4; c.save(); c.translate(W / 2 + Math.cos(a + cw / rad / 2) * rad, 470 + Math.sin(a + cw / rad / 2) * rad); c.rotate(a + cw / rad / 2 + Math.PI / 2); c.fillText(ch, -cw / 2 + 2, 0); c.restore(); a += cw / rad; }); };
+    ring(('★ ' + (d.clubShort || 'CARROM') + ' ★ PERTANDINGAN CARROM ★').toUpperCase(), R + 60, -Math.PI / 2, 30, '#6e3410');
+    await logos(c, d, 50, 40, 64);
+    c.textAlign = 'center';
+    const t = fitTitle(c, d.title.toUpperCase(), W - 160, 190, 2, 96);
+    F(c, t.s, 900, COND); c.fillStyle = '#1d120a'; t.ls.forEach((l, i) => c.fillText(l, W / 2, 870 + t.s * .9 + i * t.s * .95));
+    let y = 890 + t.ls.length * t.s * .95 + 6;
+    F(c, 22, 800, COND); c.fillStyle = T.accDark; c.fillText(fmtLine(d).toUpperCase(), W / 2, y); y += 50;
+    c.textAlign = 'left';
+    F(c, 34, 800); c.fillStyle = '#1d120a'; c.fillText([d.when, d.time].filter(Boolean).join(' · '), 80, y + 10);
+    F(c, 26, 600); c.fillStyle = 'rgba(29,18,10,.7)'; c.fillText(wrap(c, [d.venue, d.fee && 'Yuran ' + d.fee].filter(Boolean).join(' · '), W - 420, 1)[0], 80, y + 56);
+    if ((d.prizes || []).length && y + 110 < H - 50) prizes(c, d, 80, y + 112, W - 420, '#1d120a', T.acc, 24, Math.max(1, Math.min(3, Math.floor((H - 60 - y - 90) / 35))));
+    qrCard(c, d, W - 70 - 210, H - 60 - 262, 210, { bg: '#fff', label: ctaText(d) });
+  },
 };
+
 export async function makeCarromPoster(d, style = 'malam') {
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const c = cv.getContext('2d'); c.textBaseline = 'alphabetic';
