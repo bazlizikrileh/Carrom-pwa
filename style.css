@@ -856,8 +856,7 @@ table.rp-mx td.sets span { white-space:nowrap; display:inline-block; margin-righ
 .rpx-champ { margin:6px 0 0; font-size:12.5px; }
 @media print { .rpx .bracket { break-inside: avoid; } }
 /* laporan di skrin telefon: satu lajur, jadual boleh skrol sendiri (elak halaman melebar & dizum keluar) */
-.rpx-grid > *, .rpx-sec { min-width: 0; }
-.rpx .tw { overflow-x: auto; }
+@media screen { .rpx-grid > *, .rpx-sec { min-width: 0; } .rpx .tw { overflow-x: auto; } }
 @media screen and (max-width: 720px) {
   .rpx-grid { grid-template-columns: 1fr; }
   .rpx-info { grid-template-columns: 1fr 1fr; }
