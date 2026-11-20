@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.5.0';
+const VERSION = 'C1.5.1';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -310,6 +310,15 @@ function cdText(t) {
   return d ? `${d}<em>h</em> ${p(h)}<em>j</em> ${p(mi)}<em>m</em>` : `${p(h)}:${p(mi)}<em>:${p(s)}</em>`;
 }
 let _cdTimer = null;
+// Foto latar banner pertandingan: poster sendiri jika dimuat naik, jika tidak foto carrom ikut gaya poster (dikunci) atau ID
+const POSTER_IMG = { malam: 'board-angle', atas: 'board-top', dekat: 'coins-close', kelab: 'board-top', tarikh: 'coins-close', klasik: 'board-top', majalah: 'board-top', tiket: 'coins-close', belah: 'coins-close', ratu: 'board-top' };
+function bannerImg(t) {
+  const own = posterOf(t); if (own) return own;
+  const lk = ls.get('carrom:posterLock:' + t.id), L = ['board-angle', 'board-top', 'coins-close'];
+  if (POSTER_IMG[lk]) return `img/${POSTER_IMG[lk]}.webp`;
+  let h = 0; for (const ch of String(t.id)) h = (h * 31 + ch.charCodeAt(0)) | 0;
+  return `img/${L[Math.abs(h) % L.length]}.webp`;
+}
 function renderHead(t, page) {
   clearInterval(_cdTimer);
   _cdTimer = setInterval(() => { const el = document.getElementById('cdown'); if (!el) return clearInterval(_cdTimer); if (startAt(t) <= Date.now()) { clearInterval(_cdTimer); renderHead(t, page); } else el.innerHTML = cdText(t); }, 1000);
@@ -330,6 +339,8 @@ function renderHead(t, page) {
       <div class="seg wide"><small>Perlawanan</small><b>${done}<em>/${play.length}</em></b><span class="rally"><span class="fill" style="width:${pct}%"></span><span class="ball" style="left:${pct}%"></span></span></div>
       <div class="seg"><small>Papan</small><b>${onT ? `${onT}<em>/${nT}</em>` : nT}</b></div>
     </div>${sponsorStrip(t)}`;
+  $head.style.backgroundImage = `linear-gradient(160deg, color-mix(in srgb, var(--hd1, #2a1608) 82%, transparent), color-mix(in srgb, var(--hd2, #5a2d0c) 62%, transparent) 55%, color-mix(in srgb, var(--hd1, #2a1608) 90%, transparent)), url("${bannerImg(t)}")`;
+  $head.style.backgroundSize = 'cover'; $head.style.backgroundPosition = 'center';
   const pw = UNIT(t) === 'Pemain' ? 'Pemain' : UNIT(t);
   const tabs = [['tetapan', '⚙️', 'Tetapan'], ['pemain', '👥', UNIT(t)], ['langsung', '🟢', 'Langsung'], ['jadual', '📋', 'Jadual'],
     ['kumpulan', '📊', E.isMixer(t) ? 'Individu' : t.format === 'rr' ? 'Liga' : 'Kumpulan'], ['keputusan', '📝', 'Keputusan']];
@@ -3065,12 +3076,14 @@ function wireRecap(t) {
     const RD = recapData(t); RD.style = tpl;
     const logos = await Promise.all((RD.logos || []).map(src => new Promise(r => { const im = new Image(); im.onload = () => r(im); im.onerror = () => r(null); im.src = src; })));
     const md = document.getElementById('modal');
-    md.innerHTML = `<div class="sheet" style="text-align:center;max-height:92dvh;overflow:auto;padding-top:10px;padding-bottom:10px"><div class="row" style="justify-content:space-between"><b id="pvT"></b><button class="pill-btn light small" id="mx">✕</button></div>
-      <canvas id="pvC" style="height:min(480px, calc(92dvh - 200px));width:auto;max-width:80vw;aspect-ratio:9/16;border-radius:14px;margin-top:8px;background:#0a0f1d;display:block;margin-left:auto;margin-right:auto"></canvas>
+    md.innerHTML = `<div class="sheet" style="text-align:center;padding-top:10px;padding-bottom:10px"><div class="row" style="justify-content:space-between"><b id="pvT"></b><button class="pill-btn light small" id="mx">✕</button></div>
+      <canvas id="pvC" style="border-radius:14px;margin:8px auto 0;background:#0a0f1d;display:block"></canvas>
       <div class="row" style="gap:6px;justify-content:center;margin-top:8px;flex-wrap:wrap"><button class="pill-btn light small" id="pvO">🎨 Gaya lain</button><button class="pill-btn light small" id="pvM">🎵 Lagu lain</button><button class="pill-btn brand small" id="pvU">✅ Guna ini</button></div>
       <p class="muted small" style="margin:6px 0 0">Pratonton pembukaan & angka sahaja. Babak lain sama untuk semua gaya.</p></div>`;
     md.hidden = false;
     const cvs = document.getElementById('pvC'); cvs.width = 360; cvs.height = 640;
+    { const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight, vw = window.innerWidth;
+      const h = Math.max(220, Math.min(480, vh - 230, (vw - 48) * 16 / 9)); cvs.style.height = h + 'px'; cvs.style.width = Math.round(h * 9 / 16) + 'px'; }
     const g = cvs.getContext('2d');
     let raf = 0, stopM = () => {}, D = null, R = null, t0 = 0, last = 0, el = 0, end = 0;
     const start = async () => {
