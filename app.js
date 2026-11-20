@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.2.1';
+const VERSION = 'C1.2.2';
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
@@ -1876,7 +1876,7 @@ function payBar(t, rows) {
 }
 const REG_ST = { pending: ['⏳', 'Menunggu'], ok: ['✓', 'Disahkan'], no: ['✕', 'Ditolak'] };
 function regCard(t) {
-  if (!store.isCloud(t.id)) return '';
+  if (!store.isCloud(t.id)) return canAdmin(t) && t.regOpen ? `<div class="card notice small">🔗 <b>Pautan pendaftaran belum tersedia.</b> Pertandingan ini disimpan di telefon ini sahaja (${store.isLocal(t.id) ? '🧪 pertandingan ujian' : 'belum log masuk'}). ${cloud.isAdmin() ? 'Cipta pertandingan baharu <b>tanpa</b> tanda “Pertandingan ujian” supaya disimpan di awan.' : 'Tekan <b>Log masuk</b> di atas sebagai penganjur, kemudian cipta pertandingan baharu.'}</div>` : '';
   cloud.watchRegistrations(t.id);
   const regs = cloud.state.regs[t.id] || [], admin = canAdmin(t), uid = cloud.myUid();
   if (!regOn(t) && !regs.length) return `<div class="card">${shareRow(t)}</div>`;
