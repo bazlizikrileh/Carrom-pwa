@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.5.4';
+const VERSION = 'C1.5.5';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -3186,10 +3186,13 @@ function reportBody(t, played, resTable) {
 
 function viewReport(t) {
   // peserta & penonton: laporan, video & ringkasan WhatsApp hanya selepas semua perlawanan tamat
-  const allDone = t.matches.length && t.matches.every(m => m.status === 'done' || m.status === 'bye');
-  if (!allDone && !canEdit(t)) {
+  // laporan, video & ringkasan WhatsApp hanya selepas pertandingan tamat sepenuhnya (termasuk akhir KO & pool) — untuk semua, termasuk penganjur
+  const allDone = t.matches.length && t.matches.every(m => m.status === 'done' || m.status === 'bye') && (t.stage === 'done' || t.format === 'rr');
+  if (!allDone) {
+    const left = t.matches.filter(m => m.status !== 'done' && m.status !== 'bye' && m.a !== 'BYE' && m.b !== 'BYE').length;
     $app.innerHTML = `${section('Laporan', t.name)}<div class="card" style="text-align:center"><div style="font-size:42px">⚪</div>
-      <p><b>Laporan penuh, video ringkasan dan ringkasan keputusan</b> tersedia selepas semua perlawanan tamat.</p>
+      <p><b>Laporan penuh, video ringkasan dan ringkasan keputusan</b> boleh dijana selepas pertandingan tamat${t.format === 'rr' ? '' : ' (termasuk perlawanan akhir kalah mati' + (t.pool !== '0' ? ' dan pool kalah' : '') + ')'}.</p>
+      ${canEdit(t) && t.format === 'group_ko' && E.groupStageComplete(t) && !t.rounds.ko ? `<p class="small">Peringkat kumpulan sudah selesai. Seterusnya: jana kalah mati di tab <b>⚔️ Knockout</b>.</p><a class="pill-btn orange" href="#/t/${t.id}/kalahmati"><span class="dot"></span>Ke Knockout</a>` : left ? `<p class="muted small">${left} perlawanan lagi.</p>` : ''}
       ${t.groups.length ? `<p class="muted small">Untuk kongsi kedudukan semasa: tab <b>${t.format === 'rr' ? 'Liga' : 'Kumpulan'}</b> → <b>📷 Gambar kedudukan</b> (termasuk matriks keputusan).</p>
       <a class="pill-btn orange" href="#/t/${t.id}/kumpulan"><span class="dot"></span>Ke ${t.format === 'rr' ? 'Liga' : 'Kumpulan'}</a>` : ''}</div>`;
     return;
