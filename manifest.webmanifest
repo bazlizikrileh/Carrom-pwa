@@ -1,7 +1,7 @@
 {
   "name": "Carrom Portal",
   "short_name": "Carrom",
-  "description": "Portal pertandingan carrom: cabutan, jadual, skor dan kedudukan.",
+  "description": "Portal pertandingan carrom: undian, jadual, keputusan dan kedudukan.",
   "lang": "ms",
   "start_url": "./",
   "scope": "./",

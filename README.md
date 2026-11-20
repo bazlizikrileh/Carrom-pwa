@@ -1,6 +1,6 @@
 # Carrom Portal (PWA)
 
-Portal pertandingan carrom. Alamat: `https://bazlizikrileh.github.io/carrom-pwa/`
+Portal pertandingan carrom. Alamat: `https://carrom-portal.pages.dev/` (Cloudflare Pages, disambung ke repo ini; tiada build, output `/`)
 Dibina daripada Portal Pingpong (repo `Pingpong-pwa`) dan disesuaikan untuk carrom.
 
 ## Ciri carrom

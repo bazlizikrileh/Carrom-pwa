@@ -5,7 +5,8 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.1.0';
+const VERSION = 'C1.2.0';
+const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
 const $app = document.getElementById('app');
 const $tabs = document.getElementById('tabs');
 const $head = document.getElementById('thead');
@@ -479,6 +480,7 @@ function viewHome() {
       <div class="row"><button class="pill-btn light small" id="exp">Eksport</button>
       <label class="pill-btn light small" style="margin:0">Import<input type="file" id="imp" accept=".json,application/json" hidden></label></div>
     </details>
+    <p style="text-align:center;margin:18px 0 6px"><a class="pill-btn light small" href="${PINGPONG_URL}" target="_blank" rel="noopener">🏓 Portal Pingpong</a></p>
     <p class="muted small" style="text-align:center">Carrom Portal · Versi ${VERSION}</p>`;
   $app.querySelectorAll('[data-hclub]').forEach(b => (b.onclick = () => { _homeClub = b.dataset.hclub; viewHome(); }));
   const af = document.getElementById('arcF'); if (af) af.ontoggle = () => ls.set('carrom:arcOpen', af.open ? '1' : '0');

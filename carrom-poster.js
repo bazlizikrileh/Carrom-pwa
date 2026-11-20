@@ -86,7 +86,7 @@ function prizes(c, d, x, y, w, col, acc, size = 26, max = 3) {
 function qrCard(c, d, x, y, s, { bg = '#fff', fg = '#120c08', label = 'Imbas untuk daftar' } = {}) {
   c.save(); c.shadowColor = 'rgba(0,0,0,.35)'; c.shadowBlur = 30; c.shadowOffsetY = 10;
   c.fillStyle = bg; rr(c, x, y, s, s + 52, 22); c.fill(); c.restore();
-  drawQR(c, d.url || 'https://bazlizikrileh.github.io/', x + 14, y + 14, s - 28, fg);
+  drawQR(c, d.url || location.href.split('#')[0], x + 14, y + 14, s - 28, fg);
   F(c, 19, 800, COND); c.fillStyle = fg; c.textAlign = 'center'; c.fillText(label.toUpperCase(), x + s / 2, y + s + 30); c.textAlign = 'left';
 }
 function pill(c, x, y, text, bg, fg, size = 24) {
