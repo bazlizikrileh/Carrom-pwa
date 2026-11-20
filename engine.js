@@ -55,7 +55,7 @@ export function tablesOf(t) {
 export function newTournament(opts = {}) {
   return migrate({
     id: uid(), sport: 'carrom', name: 'Pertandingan Baharu', clubId: '', club: '', date: '', startTime: '21:00', sessionMin: 30,
-    entryMode: 'single', teamSize: 3,
+    entryMode: 'single', teamSize: 3, tieFormat: 'SSD',
     format: 'group_ko',          // group_ko | rr (liga) | ko (kalah mati sahaja)
     numGroups: 0, groupSize: 4, qualifyPerGroup: 2, bestThirds: 0,
     groupFormat: '1', koFormat: '1',
@@ -84,7 +84,7 @@ export function migrate(t) {
   t.hcMode ||= t.handicap ? 'manual' : 'off';
   t.handicap = t.hcMode !== 'off';
   t.levels ||= {};
-  t.tieFormat ||= 'SD';
+  t.tieFormat ||= 'SSD';   // carrom: S+S+D lalai (3 perlawanan → sentiasa ada pemenang)
   t.tieRule ||= 'draw';
   if (t.groupSize > 6) t.groupSize = 6;
   if (t.groupSize < 3) t.groupSize = 3;

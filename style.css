@@ -865,3 +865,15 @@ table.rp-mx td.sets span { white-space:nowrap; display:inline-block; margin-righ
   .report .bracket { overflow-x: auto; }
   .report .bracket .col { min-width: 150px; }
 }
+/* kad keputusan carrom */
+.ks-grid td.ks-c { text-align:center; vertical-align:middle; }
+.ks-col { display:block; font-size:10px; color:#555; margin-bottom:2px; }
+.ks-box { display:inline-block; width:22px; height:22px; border:2px solid #333; border-radius:5px; }
+.ks-hint { font-size:10.5px; color:#555; margin:4px 0; }
+/* rekod pemain */
+.rk { padding:10px 14px; margin-bottom:8px; }
+.rk summary { cursor:pointer; display:flex; flex-direction:column; gap:2px; list-style:none; }
+.rk summary::-webkit-details-marker { display:none; }
+.rk-s { font-size:12.5px; color: var(--muted); }
+.rk-t { margin-top:8px; display:flex; flex-direction:column; gap:4px; }
+.rk-t a { display:flex; justify-content:space-between; gap:8px; font-size:13px; text-decoration:none; color: var(--ink); padding:6px 0; border-top:1px solid var(--line); }
