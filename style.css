@@ -905,3 +905,40 @@ body.tv .as-bar { display:none; }
 /* Urus kelab */
 .cd-logo { width:42px; height:42px; border-radius:10px; border:2px solid var(--line); background:#fff; display:inline-flex; align-items:center; justify-content:center; overflow:hidden; flex:none; }
 .cd-logo img { max-width:100%; max-height:100%; object-fit:contain; }
+
+/* ---------- Mod TV carrom: papan kecil pandangan atas, saiz ikut bilangan papan ---------- */
+.tv-h .tv-pg { font-size:.6em; opacity:.8; margin-left:.6vw; }
+.tv-h .tv-leg { float:right; font-size:.5em; opacity:.75; font-weight:600; margin-top:.4em; }
+.tv-cb-grid { grid-template-columns: repeat(var(--tvc), minmax(0, 1fr)); grid-template-rows: repeat(var(--tvr), minmax(0, 1fr)); grid-auto-rows:unset; }
+.tv-cb { container-type: size; min-height:0; padding:.6vw; gap:.35vw; justify-content:flex-start; }
+.tv-cb .tv-tno { font-size: max(11px, 5.5cqh); line-height:1; }
+.tv-cb .tv-sub, .tv-cb .tv-next { font-size: max(10px, 4.4cqh); line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cb-row { flex:1; min-height:0; display:grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap: 2cqw; --S: min(40cqw, 58cqh); }
+.cb-board { position:relative; width: var(--S); height: var(--S); border-radius: calc(var(--S) * .05); padding: calc(var(--S) * .07);
+  background: linear-gradient(160deg, #5a2f10, #3a1c07); box-shadow: inset 0 0 0 2px #b07a42, 0 .4vw 1vw rgba(0,0,0,.35); }
+.cb-board .pk { position:absolute; width: calc(var(--S) * .085); height: calc(var(--S) * .085); border-radius:50%; background:#0d0603; box-shadow: inset 0 0 0 2px #2a1407; z-index:2; }
+.cb-board .p1 { left: calc(var(--S) * .045); top: calc(var(--S) * .045); } .cb-board .p2 { right: calc(var(--S) * .045); top: calc(var(--S) * .045); }
+.cb-board .p3 { left: calc(var(--S) * .045); bottom: calc(var(--S) * .045); } .cb-board .p4 { right: calc(var(--S) * .045); bottom: calc(var(--S) * .045); }
+.cb-play { position:relative; width:100%; height:100%; border-radius: calc(var(--S) * .02);
+  background: repeating-linear-gradient(90deg, rgba(120,70,30,.05) 0 3px, transparent 3px 9px), linear-gradient(160deg, #f6dcae, #e7bf82);
+  box-shadow: inset 0 0 0 calc(var(--S) * .012) rgba(122,58,18,.35); }
+.cb-play .bl { position:absolute; border:1.5px solid rgba(122,58,18,.6); border-radius:3px; }
+.cb-play .bl.l, .cb-play .bl.r { top:18%; bottom:18%; width:5%; } .cb-play .bl.l { left:8%; } .cb-play .bl.r { right:8%; }
+.cb-play .bl.t, .cb-play .bl.b { left:18%; right:18%; height:5%; } .cb-play .bl.t { top:8%; } .cb-play .bl.b { bottom:8%; }
+.cb-c { position:absolute; left:50%; top:50%; width:30%; height:30%; transform:translate(-50%,-50%); border-radius:50%; border:1.5px solid rgba(122,58,18,.6);
+  background: radial-gradient(circle, #d62828 0 15%, #7a1010 16% 18%, transparent 19%); }
+.cb-coin { position:absolute; top:50%; width:13%; height:13%; transform:translate(-50%,-50%); border-radius:50%; box-shadow: 0 1px 3px rgba(0,0,0,.45); }
+.cb-coin.w { background: radial-gradient(circle at 35% 35%, #fff, #e8dcc6 60%, #c9b590); }
+.cb-coin.k { background: radial-gradient(circle at 35% 35%, #555, #1a1a1a 60%, #000); }
+.cb-coin.sa { left:10.5%; } .cb-coin.sb { left:89.5%; }
+.cb-side { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; min-width:0; gap: 1.2cqh; }
+.cb-nm { font-weight:800; font-size: max(11px, 7cqh); line-height:1.12; max-width:100%; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; word-break:break-word; }
+.cb-big { font-family: var(--num); font-weight:900; font-size: max(22px, 26cqh); line-height:.95; color:#ffd166; }
+.cb-col { display:inline-flex; align-items:center; gap:.4em; font-size: max(9px, 4.2cqh); font-weight:800; letter-spacing:.06em; white-space:nowrap; opacity:.9; }
+.cb-col i { width:1em; height:1em; border-radius:50%; display:inline-block; }
+.cb-col.w i { background: radial-gradient(circle at 35% 35%, #fff, #d9cbb0); } .cb-col.k i { background: radial-gradient(circle at 35% 35%, #666, #000); box-shadow:0 0 0 1px rgba(255,255,255,.5); }
+.cb-gm { text-align:center; font-weight:800; letter-spacing:.1em; font-size: max(10px, 5cqh); color:#ffb02e; }
+.cb-gm span { letter-spacing:0; }
+.tv-cb.free { opacity:.5; }
+.tv-cb.hot { border-color:#ffb02e; box-shadow: 0 0 0 2px #ffb02e, 0 0 1.4vw rgba(255,176,46,.45); }
+@media (orientation: portrait) { .tv-cb-grid { grid-template-columns: repeat(min(var(--tvc), 2), minmax(0, 1fr)); grid-template-rows:none; grid-auto-rows: minmax(30vh, 1fr); overflow:auto; } }

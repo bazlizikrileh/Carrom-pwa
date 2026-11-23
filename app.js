@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.9.0';
+const VERSION = 'C1.10.0';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -2915,7 +2915,8 @@ function stopTV() { clearInterval(_tv.timer); _tv.timer = null; _tv.id = null; }
 function tvSlides(t) {
   const S = [];
   const { live, cand } = LV.liveState(t);
-  if (live.length || cand.length) S.push({ k: 'live', sec: 20 });
+  // papan langsung: maks. 12 papan setiap slaid (pertandingan carrom boleh guna hingga 40 papan)
+  if (live.length || cand.length) { const n = LV.tableList(t).length, pg = Math.ceil(n / TV_PER) || 1; for (let i = 0; i < pg; i++) S.push({ k: 'live', p: i, pages: pg, sec: pg > 1 ? 15 : 20 }); }
   for (let i = 0; i < t.groups.length; i += 2) S.push({ k: 'groups', g: t.groups.slice(i, i + 2), sec: 15 });
   if (t.rounds.ko) S.push({ k: 'ko', sec: 18 });
   if (t.rounds.pool) S.push({ k: 'pool', sec: 15 });
@@ -2926,13 +2927,10 @@ function tvSlides(t) {
 function tvSlideHtml(t, sl) {
   if (sl.k === 'live') {
     const { occ, xr } = LV.liveState(t), nx = LV.nextUp(t), U = LV.umpirePlan(t);
-    return `<h2 class="tv-h">🟢 Sedang berlangsung <small style="font-size:.55em;opacity:.8">⚪ Putih/Coklat pukul dahulu · ⚫ Hitam</small></h2><div class="tv-tables">${LV.tableList(t).map(({ k }) => {
-      const m = occ[k], ri = xr[k], u = m && ri == null ? LV.umpireOf(t, m, U) : '', x = m ? liveOf(t, m, m.id + (ri != null ? '~' + ri : '')) : null;
-      return `<div class="tv-tt ${m ? '' : 'free'}"><div class="tv-tno">PAPAN ${k}</div>
-        ${m ? `<div class="tv-court${x ? ' live' : ''}">${x && x.sw ? courtSide(t, m, 1, x) : courtSide(t, m, 0, x)}<i></i>${x && x.sw ? courtSide(t, m, 0, x) : courtSide(t, m, 1, x)}</div>
-          <div class="tv-sub">${x ? `<span class="lv-dot"></span> <b class="lv-set">${setTag(t, x, m)}</b> · ` : ''}${esc(E.stageLabel(t, m))}${u ? ` · 🟣 ${esc(E.pname(t, u))}` : ''}</div>` : '<div class="tv-court empty"><div>Kosong</div></div>'}
-        ${nx[k] ? `<div class="tv-next">⏭️ ${CDOT[E.colourOf(nx[k], 'a', 0)]} ${esc(E.pname(t, nx[k].a))} lwn ${CDOT[E.colourOf(nx[k], 'b', 0)]} ${esc(E.pname(t, nx[k].b))}</div>` : ''}</div>`;
-    }).join('')}</div>`;
+    const all = LV.tableList(t), list = all.slice((sl.p || 0) * TV_PER, ((sl.p || 0) + 1) * TV_PER), n = list.length;
+    const cols = n <= 1 ? 1 : n <= 4 ? 2 : n <= 6 ? 3 : n === 9 ? 3 : 4;
+    return `<h2 class="tv-h">🟢 Sedang berlangsung${sl.pages > 1 ? ` <small class="tv-pg">Papan ${list[0].k}–${list[n - 1].k} · ${sl.p + 1}/${sl.pages}</small>` : ''}<small class="tv-leg">⚪ Putih/Coklat pukul dahulu · ⚫ Hitam</small></h2>
+      <div class="tv-tables tv-cb-grid" style="--tvc:${cols};--tvr:${Math.ceil(n / cols)}">${list.map(({ k }) => tvBoard(t, k, occ[k], xr[k], nx[k], U)).join('')}</div>`;
   }
   if (sl.k === 'groups') return `<h2 class="tv-h">📊 ${t.format === 'rr' ? 'Kedudukan liga' : 'Kedudukan kumpulan'}</h2><div class="tv-cols">${sl.g.map(g => `<div class="tv-card"><h3>${t.format === 'rr' ? 'Liga' : 'Kumpulan ' + esc(g.name)}</h3>${standingsTable(t, g)}</div>`).join('')}</div>`;
   if (sl.k === 'ko') return `<h2 class="tv-h">⚔️ Kalah mati</h2><div class="tv-card tv-fit"><div class="tv-scale">${bracketHtml(t, 'ko')}</div></div>`;
@@ -2944,6 +2942,32 @@ function tvSlideHtml(t, sl) {
   }
   const cd = startAt(t) > Date.now();
   return `<div class="tv-wait"><div class="big">${cd ? `Bermula dalam <b id="cdown">${cdText(t)}</b>` : 'Pertandingan akan bermula sebentar lagi'}</div></div>`;
+}
+const TV_PER = 12;
+// Mod TV: setiap perlawanan sebagai papan carrom kecil (pandangan atas). Keputusan sahaja: jumlah besar = game dimenangi.
+function tvBoard(t, k, m, ri, nx, U) {
+  const head = `<div class="tv-tno">PAPAN ${esc(k)}</div>`;
+  const next = nx ? `<div class="tv-next">⏭️ ${CDOT[E.colourOf(nx, 'a', 0)]} ${esc(E.pname(t, nx.a))} lwn ${CDOT[E.colourOf(nx, 'b', 0)]} ${esc(E.pname(t, nx.b))}</div>` : '';
+  if (!m) return `<div class="tv-tt tv-cb free">${head}<div class="cb-row"><div class="cb-side"></div><div class="cb-board"><i class="pk p1"></i><i class="pk p2"></i><i class="pk p3"></i><i class="pk p4"></i><div class="cb-play"><i class="cb-c"></i></div></div><div class="cb-side"></div></div><div class="cb-gm">KOSONG</div>${next}</div>`;
+  const team = E.isTeam(t), f = E.fmtFor(t, m.stage), r = E.evaluateMatch(t, m), big = E.tieScore(t, r);
+  // rubber & game semasa
+  let cri = 0; if (team) { cri = m.rubbers.findIndex(x => !x || !E.evaluateMatch(t, { ...m, rubbers: [x] }).winner); if (cri < 0) cri = Math.max(0, m.rubbers.length - 1); }
+  const sets = ((m.rubbers[cri] || {}).sets || []), gi = Math.min(sets.length, f.bo - 1), ck = gi + (team ? cri : 0);
+  const ga = sets.filter(g => g[0] > g[1]).length, gb = sets.length - ga, need = Math.ceil(f.bo / 2);
+  const decider = !team && f.bo > 1 && ga === need - 1 && gb === need - 1;
+  const wSide = E.whiteSide(m, ck), u = ri == null ? LV.umpireOf(t, m, U) : '';
+  const side = sd => { const id = sd === 'a' ? m.a : m.b, c = E.colourOf(m, sd, ck);
+    return `<div class="cb-side ${sd}"><div class="cb-nm">${esc(E.pname(t, id))}</div><div class="cb-big">${big[sd === 'a' ? 0 : 1]}</div>
+      <div class="cb-col ${c}"><i></i>${c === 'w' ? 'PUTIH' : 'HITAM'}${wSide === sd ? ' · PUKUL DAHULU' : ''}</div></div>`; };
+  const gtxt = team ? esc(E.rubberLabel(t, cri)) : f.bo > 1 ? `GAME ${gi + 1}/${f.bo}` : '1 GAME';
+  const coin = sd => `<i class="cb-coin ${E.colourOf(m, sd, ck)}"></i>`;
+  return `<div class="tv-tt tv-cb${decider ? ' hot' : ''}">${head}
+    <div class="cb-row">${side('a')}
+      <div class="cb-board"><i class="pk p1"></i><i class="pk p2"></i><i class="pk p3"></i><i class="pk p4"></i>
+        <div class="cb-play"><i class="bl l"></i><i class="bl r"></i><i class="bl t"></i><i class="bl b"></i><i class="cb-c"></i>${coin('a').replace('cb-coin', 'cb-coin sa')}${coin('b').replace('cb-coin', 'cb-coin sb')}</div></div>
+      ${side('b')}</div>
+    <div class="cb-gm">${gtxt}${decider ? ' · 🔥 GAME PENENTU' : ''}${f.bo > 1 && !team && sets.length ? ` <span>${sets.map((g, x) => CDOT[E.colourOf(m, g[0] > g[1] ? 'a' : 'b', x)]).join('')}</span>` : ''}</div>
+    <div class="tv-sub">${esc(E.stageLabel(t, m))}${u ? ` · 🟣 ${esc(E.pname(t, u))}` : ''}</div>${next}</div>`;
 }
 function tvLiveRefresh() {
   const t = _tv.id && load(_tv.id), body = document.getElementById('tvBody'); if (!t || !body) return;
