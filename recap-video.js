@@ -42,9 +42,8 @@ export function buildRecap(d) {
   brk(d.ko, 'KALAH MATI'); brk(d.pool, 'POOL KALAH');
   // detik menarik selepas liga / bracket, sebelum podium
   if (aw.length) S.push({ k: 'awards', dur: 0.9 + aw.length * 2.3, chap: 'DETIK MENARIK' });
-  // 📷 gambar pertandingan: 3 gambar setiap babak, kesan Ken Burns
-  const PH = (d.photos || []).slice(0, 12);
-  for (let i = 0; i < PH.length; i += 3) S.push({ k: 'photos', ph: PH.slice(i, i + 3), dur: 1.2 + Math.min(3, PH.length - i) * 2.2, chap: i === 0 ? 'GAMBAR KENANGAN' : '' });
+  const ph = (d.photos || []).filter(p => p && p.im && p.im.width).slice(0, 8), PER = 2.4;
+  if (ph.length) S.push({ k: 'photos', dur: 0.8 + ph.length * PER + 0.2, chap: 'GALERI' });
   if (d.podium && d.podium.length) S.push({ k: 'podium', dur: 7, chap: 'PODIUM' });
   S.push({ k: 'end', dur: 4.6 });
   let acc = 0; S.forEach(x => { x.t0 = acc; acc += x.dur; });
@@ -62,7 +61,7 @@ export function buildRecap(d) {
     if (x.k === 'bracket') x.vis.forEach((_, i) => ev.push({ t: x.t0 + 1.1 + i * 1.45 + 0.7, kind: i === x.vis.length - 1 ? 'done' : 'card', i: 5 + i }));
     if (x.k === 'podium') [[1.0, 'card'], [2.4, 'card'], [3.9, 'boom']].forEach(([t, k], i) => ev.push({ t: x.t0 + t, kind: k, i: 8 + i }));
     if (x.k === 'end') ev.push({ t: x.t0 + 0.3, kind: 'end' });
-    if (x.k === 'photos') x.ph.forEach((_, i) => ev.push({ t: x.t0 + 0.7 + i * 2.2, kind: 'card', i: 4 + i }));
+    if (x.k === 'photos') ph.forEach((_, i) => ev.push({ t: x.t0 + 0.8 + i * PER, kind: 'card', i: 4 + i * 2 }));
   });
 
   const make = (logos, sc) => {
@@ -327,25 +326,32 @@ export function buildRecap(d) {
           c.restore(); c.textAlign = 'left';
         }
       },
-      photos(t, x) {
-        // satu gambar besar pada satu masa; gambar terdahulu kekal kecil di bawah sebagai bingkai polaroid
-        const n = x.ph.length, cur = Math.min(n - 1, Math.max(0, Math.floor((t - 0.5) / 2.2)));
-        x.ph.forEach((p, i) => {
-          const q = cl((t - 0.5 - i * 2.2) / 0.45); if (q <= 0) return;
-          const big = i === cur, lt = t - 0.5 - i * 2.2;
-          const fw = big ? W - 110 : (W - 160) / 3, fh = big ? fw * 1.05 : fw * 0.9;
-          const cx = big ? W / 2 : 80 + fw / 2 + i * (fw + 0), cy = big ? 590 : 1100;
-          const rot = big ? (i % 2 ? 0.025 : -0.025) : (i % 2 ? 0.05 : -0.05);
-          c.save(); c.globalAlpha = q; c.translate(cx, cy + (1 - q) * 60); c.rotate(rot * (big ? 1 : 1)); c.scale(0.9 + 0.1 * q, 0.9 + 0.1 * q);
-          c.shadowColor = 'rgba(0,0,0,.55)'; c.shadowBlur = 30; c.fillStyle = '#fbf6ea'; c.fillRect(-fw / 2 - 14, -fh / 2 - 14, fw + 28, fh + (big && p.cap ? 90 : 28)); c.shadowBlur = 0;
-          // Ken Burns: zum perlahan dalam bingkai
-          const im = p.im, z = 1.04 + (big ? 0.08 * cl(lt / 2.4) : 0), r = Math.max(fw / im.width, fh / im.height) * z;
-          const iw = im.width * r, ih = im.height * r;
-          c.save(); c.beginPath(); c.rect(-fw / 2, -fh / 2, fw, fh); c.clip();
-          c.drawImage(im, -iw / 2 + (big ? (i % 2 ? -1 : 1) * 14 * cl(lt / 2.4) : 0), -ih / 2, iw, ih); c.restore();
-          if (big && p.cap) { c.fillStyle = '#3a1c07'; c.textAlign = 'center'; c.fillText(fit(c, p.cap, fw - 20, 30, 800), 0, fh / 2 + 52); c.textAlign = 'left'; }
-          c.restore();
-        });
+      photos(t) {
+        const i = Math.min(ph.length - 1, Math.floor(Math.max(0, t - 0.8) / PER)), lt = t - 0.8 - i * PER, p = ph[i];
+        if (!p || lt < 0) return;
+        const side = i % 2 ? 1 : -1, q = ease(lt / 0.45), o = i < ph.length - 1 ? cl((lt - PER + 0.35) / 0.35) : 0;
+        const im = p.im, k = Math.min((W - 100) / im.width, (H * 0.55) / im.height), w = im.width * k, h = im.height * k, cy = 590, pad = 14;
+        c.save(); c.globalAlpha = 1 - o; c.translate(W / 2 + (1 - q) * W * 0.7 * side + o * W * 0.25 * -side, cy); c.rotate(side * 0.03 * (1 - 0.5 * q));
+        c.fillStyle = 'rgba(0,0,0,.4)'; rr(c, -w / 2 - pad + 12, -h / 2 - pad + 16, w + pad * 2, h + pad * 2, 12); c.fill();
+        c.fillStyle = WHITE; rr(c, -w / 2 - pad, -h / 2 - pad, w + pad * 2, h + pad * 2, 12); c.fill();
+        // zum perlahan (Ken Burns) di dalam bingkai
+        const z = 1 + 0.08 * cl(lt / PER);
+        c.save(); c.beginPath(); c.rect(-w / 2, -h / 2, w, h); c.clip(); c.drawImage(im, -w * z / 2, -h * z / 2, w * z, h * z); c.restore();
+        c.restore();
+        let yC = cy + h / 2 + pad + 70;
+        if (p.tag) {   // label 🥇 JOHAN / NAIB JOHAN: pil emas di bawah gambar
+          const tq = cl((lt - 0.25) / 0.3) * (1 - o); c.save(); c.globalAlpha = tq; c.font = F(900, 30); c.textAlign = 'center';
+          const tw = c.measureText(p.tag).width + 56, ty = cy + h / 2 + pad + 26;
+          c.fillStyle = GOLD; rr(c, W / 2 - tw / 2, ty, tw, 50, 25); c.fill(); c.fillStyle = '#2a1600'; c.fillText(p.tag, W / 2, ty + 36);
+          c.restore(); c.textAlign = 'left'; yC += 62;
+        }
+        if (p.cap) {
+          const cq = cl((lt - 0.35) / 0.35) * (1 - o); c.save(); c.globalAlpha = cq; c.textAlign = 'center';
+          const ls = wrap(c, p.cap, W - 120, 34, 800, 2, true), y0 = yC;
+          ls.forEach((ln, j) => { c.font = F(800, 34, true); c.fillStyle = HOT; c.fillText(ln, W / 2 + 3, y0 + j * 44 + 3); c.fillStyle = WHITE; c.fillText(ln, W / 2, y0 + j * 44); });
+          c.restore(); c.textAlign = 'left';
+        }
+        if (ph.length > 1) ph.forEach((_, j) => { c.fillStyle = j === i ? GOLD : 'rgba(255,255,255,.3)'; rr(c, W / 2 + (j - (ph.length - 1) / 2) * 40 - 13, 1150, 26, 8, 4); c.fill(); });
       },
       end(t) {
         const words = ['TAHNIAH', 'SEMUA!'];
