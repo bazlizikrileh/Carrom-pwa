@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.7.0';
+const VERSION = 'C1.8.0';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -1515,7 +1515,7 @@ async function standingsImages(t) {
   }
   if (navigator.canShare && navigator.canShare({ files })) {
     out.insertAdjacentHTML('afterbegin', '<button class="pill-btn" id="shr" style="background:#25d366;margin-top:10px">📲 Kongsi ke WhatsApp</button>');
-    document.getElementById('shr').onclick = () => navigator.share({ files, title: t.name, text: `Kedudukan kumpulan · ${t.name}` }).catch(() => {});
+    document.getElementById('shr').onclick = () => navigator.share({ files, title: t.name, text: `Kedudukan kumpulan · ${t.name}` }).catch(async e => { if (e && e.name === 'AbortError') return; const RP = await import('./reg-poster.js'); for (const f of files) await RP.shareBlob(f, f.name, t.name); });
   }
 }
 
@@ -2898,23 +2898,9 @@ function wirePoster(t) {
   const b = document.getElementById('posterBtn');
   if (b) b.onclick = async () => {
     b.disabled = true;
-    // jana dahulu, kemudian kongsi dengan tekanan baharu (share() perlukan tekanan pengguna yang masih segar)
-    const md = document.getElementById('modal');
-    md.innerHTML = `<div class="sheet"><div class="row" style="justify-content:space-between"><h3 style="margin:0">🏆 Poster juara</h3><button class="pill-btn light small" id="mx">✕</button></div>
-      <div class="rp-box" id="pjBox"><p class="muted">Menjana…</p></div></div>`;
-    md.hidden = false; md.onclick = e => { if (e.target === md || e.target.id === 'mx') md.hidden = true; };
-    try {
-      const m = await import('./poster.js'), o = posterOpts(t);
-      const blob = await m.makePoster(o), name = `Juara-${(o.title || 'pertandingan').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-')}.png`;
-      const file = new File([blob], name, { type: 'image/png' }), canSh = !!(navigator.canShare && navigator.canShare({ files: [file] }));
-      document.getElementById('pjBox').innerHTML = `<img src="${URL.createObjectURL(blob)}" class="rp-img" alt="Poster juara"><div class="btn-stack" style="margin-top:10px">
-        ${canSh ? '<button class="pill-btn" id="pjWa" style="background:#25d366;color:#fff"><span class="dot" style="background:#fff"></span>💬 Kongsi ke WhatsApp</button>' : ''}
-        <button class="pill-btn light" id="pjDl">⬇️ Muat turun</button></div>
-        ${canSh ? '<p class="muted small" style="margin:8px 0 0">Pilih <b>WhatsApp</b> dalam senarai kongsi, kemudian pilih group.</p>' : ''}`;
-      const sh = document.getElementById('pjWa');
-      if (sh) sh.onclick = () => navigator.share({ files: [file], title: o.title, text: `🏆 Keputusan ${o.title}` }).catch(e => { if (!e || e.name !== 'AbortError') toast('Tidak dapat dikongsi. Cuba Muat turun.'); });
-      document.getElementById('pjDl').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); toast('Poster dimuat turun ke telefon'); };
-    } catch (e) { document.getElementById('pjBox').innerHTML = `<p>Gagal: ${esc(e.message || String(e))}</p>`; }
+    // kongsi terus; jika tekanan pengguna luput semasa menjana, lapisan "Tekan untuk kongsi" dipapar (shareBlob)
+    try { const m = await import('./poster.js'); const r = await m.sharePoster(posterOpts(t)); if (r === 'download') toast('Poster dimuat turun ke telefon'); }
+    catch (e) { toast('Gagal: ' + (e.message || e)); }
     b.disabled = false;
   };
 }
