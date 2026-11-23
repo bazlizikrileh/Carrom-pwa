@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.8.0';
+const VERSION = 'C1.9.0';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -64,7 +64,8 @@ function pushStatusDiff(a, b) {
   }
 }
 // Topik push peranti ini: penganjur (adm), nama dipilih (me), pendaftaran (reg)
-let _pushT = null;
+let _pushT = null, _pushForced = false;
+const devId = () => { let d = ls.get('carrom:devId'); if (!d) { d = Math.random().toString(36).slice(2, 12); ls.set('carrom:devId', d); } return d; };
 function pushSync() {
   clearTimeout(_pushT);
   _pushT = setTimeout(async () => {
@@ -72,18 +73,55 @@ function pushSync() {
     const T = [];
     for (const x of store.list()) {
       if (!store.isCloud(x.id)) continue;
+      if (x.stage !== 'done' && !ls.get('carrom:me:' + x.id) && profile().name) { const tt = load(x.id); if (tt) autoMeQuiet(tt); }
       if (store.canEdit(x.id)) T.push('adm:' + x.id);
       const me = ls.get('carrom:me:' + x.id); if (me) T.push(`me:${x.id}:${me}`);
       if (ls.get('carrom:regd:' + x.id) && cloud.myUid()) T.push(`reg:${x.id}:${cloud.myUid()}`);
       if ((me || ls.get('carrom:regd:' + x.id)) && x.stage !== 'done') T.push('t:' + x.id);   // peringatan "esok"
     }
     clubSubs().forEach(c => T.unshift('club:carrom-' + c));
-    try { await PUSH.syncTopics(T.slice(0, 30)); } catch (e) { console.warn('push', e); }
+    T.unshift('me:dev:' + devId());
+    if (cloud.state.role === 'owner') T.unshift('adm:owner');   // permohonan penganjur baharu
+    try { await PUSH.syncTopics(T.slice(0, 30), !_pushForced); _pushForced = true; } catch (e) { console.warn('push', e); }
   }, 800);
 }
 const clubSubs = () => { try { return JSON.parse(ls.get('carrom:clubSubs') || '[]'); } catch { return []; } };
-const canAdmin = t => store.canAdmin(t.id);
-const canEdit = t => store.canEdit(t.id);
+// 👁️ Paparan peserta: penganjur boleh melihat app seperti peserta/penonton (tiada kuasa urus dalam paparan).
+// Notifikasi & langganan penganjur kekal berjalan di belakang.
+const asPeserta = () => ls.get('carrom:asPeserta') === '1';
+// 👁️ Paparan admin (pemilik sahaja): lihat app seperti admin tertentu — hanya pertandingan yang diurusnya & kelabnya
+const asAdmin = () => { if (cloud.state.role !== 'owner') return null; try { return JSON.parse(ls.get('carrom:asAdmin') || 'null'); } catch { return null; } };
+const simManages = id => { const A = asAdmin(), o = cloud.managerOf(id); return !!(A && o && (o.email === A.email || (o.co || []).includes(A.email))); };
+const canAdmin = t => !asPeserta() && (asAdmin() ? store.isLocal(t.id) || (store.isCloud(t.id) && simManages(t.id)) : store.canAdmin(t.id));
+const canEdit = t => !asPeserta() && (asAdmin() ? canAdmin(t) : store.canEdit(t.id));
+const isAdm = () => !asPeserta() && (asAdmin() ? true : cloud.isAdmin());
+const effRole = () => (asPeserta() ? '' : asAdmin() ? 'admin' : cloud.state.role);
+const effClubs = () => { const c = asAdmin() ? asAdmin().clubs : cloud.state.clubs; return Array.isArray(c) ? carromClubs(c) : c; };
+// Pilihan kelab semasa cipta/ubah pertandingan. Admin (bukan pemilik) hanya nampak kelab pertandingan yang diurusnya
+// (+ Persendirian & Lain-lain); admin baharu tanpa pertandingan masih nampak semua.
+const clubLabel = k => (CLUB_OPTS[k] || (CLUBS[k] || {}).short || k).replace('🙋 ', '').replace(' (main santai)', '');
+function clubChoices(t) {
+  const ALL = { ...CLUB_OPTS, '': '— Tiada —' };
+  if (effRole() !== 'admin') return ALL;
+  // kelab yang disahkan pemilik (roles.clubs) — wajib diikut
+  const ec = effClubs();
+  if (Array.isArray(ec) && ec.length) { const o = Object.fromEntries(Object.entries(CLUB_OPTS).filter(([k]) => ec.includes(k))); if (Object.keys(o).length) return o; }
+  const mine = new Set(store.list().filter(x => store.isCloud(x.id) && canAdmin(x) && x.clubId).map(x => x.clubId));
+  if (t && t.clubId) mine.add(t.clubId);
+  const own = [...mine].filter(k => CLUBS[k] && k !== 'sendiri');
+  if (!own.length) return ALL;
+  return Object.fromEntries(Object.entries(ALL).filter(([k]) => own.includes(k) || k === 'sendiri' || k === 'lain'));
+}
+const canPreview = () => cloud.isAdmin() || cloud.isVerifier() || store.list().some(x => store.isCloud(x.id) && store.canAdmin(x.id));
+function setAsPeserta(on) { ls.set('carrom:asPeserta', on ? '1' : null); if (on) ls.set('carrom:asAdmin', null); toast(on ? '👁️ Paparan peserta dihidupkan' : 'Kembali ke paparan sebenar'); render(true); }
+function setAsAdmin(a) { ls.set('carrom:asAdmin', a ? JSON.stringify(a) : null); if (a) ls.set('carrom:asPeserta', null); toast(a ? `👁️ Paparan admin: ${a.name || a.email}` : 'Kembali ke paparan sebenar'); render(true); }
+function asBar() {
+  let b = document.getElementById('asBar'); const A = asAdmin();
+  if (!asPeserta() && !A) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('div'); b.id = 'asBar'; b.className = 'as-bar noprint'; document.body.appendChild(b); }
+  b.innerHTML = `👁️ <b>${A ? `Paparan admin: ${esc(A.name || A.email.split('@')[0])}` : 'Paparan peserta'}</b> <button type="button" class="pill-btn small light">Keluar</button>`;
+  b.querySelector('button').onclick = () => (A ? setAsAdmin(null) : setAsPeserta(false));
+}
 const isHidden = t => t.hidden ?? !!t.test;
 // Pertandingan ujian: ditanda ujian, salinan di telefon ini, atau nama mengandungi ujian/test/testing/cubaan/demo/latihan.
 // Penganjur boleh tetapkan sendiri di Tetapan (t.kind = 'test' / 'real') — pilihan itu sentiasa diutamakan.
@@ -100,6 +138,27 @@ const CLUBS = {
   sendiri: { short: 'Persendirian', name: 'Penganjur persendirian · main santai', logos: [], ownLogo: true, theme: { tb: '#0f766e', tb2: '#0b5a54', or: '#f59e0b', w: '#e6f6f4', hd1: '#062e2b', hd2: '#0f5f58' }, waGroup: '' },
   kskpkpjb: { short: 'KSKPKPJB', name: 'Kelab Sukan Kebajikan Perubatan Kesihatan dan Pergigian Johor Bahru', logos: ['logos/kskpkpjb.webp'], theme: { tb: '#16803c', tb2: '#0d5a2a', or: '#e3262e', w: '#e8f6ec', hd1: '#07301b', hd2: '#0f5a2c' }, waGroup: '' },
 };
+const CLUB_OPTS = { ksasall: 'KSAS', kskpkpjb: 'KSKPKPJB', sendiri: '🙋 Persendirian (main santai)', lain: 'Lain-lain' };
+// roles/{email}.clubs dikongsi dengan Portal Pingpong: kelab pingpong KSAS (Rimau/Kroni) dikira sebagai KSAS di carrom
+const CLUB_MAP = { ksas: 'ksasall', kroni: 'ksasall' };
+const carromClubs = L => [...new Set((L || []).map(k => CLUB_MAP[k] || k))];
+// Simpan kelab carrom tanpa membuang kelab pingpong yang sedia ada pada akaun yang sama
+const mergeClubs = (old, sel) => [...new Set([...(old || []).filter(k => !CLUB_OPTS[k] && !CLUB_MAP[k]), ...sel])];
+// ---- Kelab tambahan (Pentadbir → Urus kelab) ----
+const BUILTIN_CLUBS = new Set(Object.keys(CLUBS));
+const hexMix = (a, b, k) => { const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)); const x = p(a), y = p(b); return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * k).toString(16).padStart(2, '0')).join(''); };
+const themeFrom = (c, acc) => ({ tb: c, tb2: hexMix(c, '#000000', .22), or: acc || '#ff7a1a', w: hexMix(c, '#ffffff', .9), hd1: hexMix(c, '#000000', .72), hd2: hexMix(c, '#000000', .3) });
+let _clubDefs = [];
+function applyClubDefs(list) {
+  _clubDefs = list.filter(d => d && d.id && d.short && !BUILTIN_CLUBS.has(d.id));
+  for (const k of Object.keys(CLUBS)) if (!BUILTIN_CLUBS.has(k)) delete CLUBS[k];
+  for (const d of _clubDefs) CLUBS[d.id] = { short: d.short, name: d.name || d.short, logos: d.logo ? [d.logo] : [], thumb: d.logo || '', theme: themeFrom(d.color || '#1f4aa8', d.accent), waGroup: '', custom: true };
+  const tail = { sendiri: CLUB_OPTS.sendiri, lain: CLUB_OPTS.lain };
+  for (const k of Object.keys(CLUB_OPTS)) if (!['ksasall', 'kskpkpjb'].includes(k)) delete CLUB_OPTS[k];
+  for (const d of _clubDefs) CLUB_OPTS[d.id] = d.short;
+  Object.assign(CLUB_OPTS, tail);
+}
+try { applyClubDefs(JSON.parse(ls.get('carrom:clubDefs') || '[]')); } catch {}
 function clubOf(t) {
   if (t.clubId === undefined || t.clubId === null) t.clubId = /ksas|rimau/i.test(t.club || '') ? 'ksas' : /kskp/i.test(t.club || '') ? 'kskpkpjb' : (t.club ? 'lain' : '');
   const c = CLUBS[t.clubId];
@@ -152,7 +211,10 @@ function pn(t, id, cls = '', ph = '') {
 // ---------- Penghala ----------
 document.addEventListener('click', e => { const b = e.target.closest('[data-rcard]'); if (!b) return; const [tid, mid] = b.dataset.rcard.split('|'), t = load(tid), m = t && t.matches.find(x => x.id === mid); if (m) shareResultCard(t, m).catch(err => toast('Gagal: ' + (err.message || err))); });
 window.addEventListener('hashchange', () => { { const dw = document.getElementById('drw'); if (dw && !_drwKeep) dw.remove(); } if (window._lsWake && !/\/ls\//.test(location.hash)) window._lsWake.release().catch(() => {}); const md = document.getElementById('modal'); if (md) md.hidden = true; render(); });
-window.addEventListener('load', () => { render(); cloud.init(); });
+window.addEventListener('load', () => {
+  render(); cloud.init();
+  cloud.watchClubDefs(list => { const j = JSON.stringify(list.map(({ at, ...d }) => d)); if (j === ls.get('carrom:clubDefs')) return; ls.set('carrom:clubDefs', j); applyClubDefs(JSON.parse(j)); render(true); });
+});
 let _dirty = false;
 const busy = () => {
   const a = document.activeElement;
@@ -167,6 +229,7 @@ document.addEventListener('focusout', () => setTimeout(() => { if (_dirty && !bu
 cloud.onChange(what => {
   try { checkNotify(); } catch (e) { console.warn(e); }
   if (what === 'role' || what === 'tournaments' || what === 'auth') pushSync();
+  if (what === 'auth') syncProfile();
   updateTop();
   if (_cur && store.isCloud(_cur) && store.canEdit(_cur)) cloud.watchSubmissions(_cur);
   if (['pending', 'tournaments', 'role', 'auth', 'error', 'regs', 'poster'].includes(what)) softRender();
@@ -249,6 +312,7 @@ let _cur = null, _back = 'keputusan';
 const current = () => (_cur ? load(_cur) : null);
 
 function render(keep = false) {
+  asBar();
   const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
   const y = window.scrollY;
   if (!keep) window.scrollTo(0, 0);
@@ -344,7 +408,7 @@ function renderHead(t, page) {
   $head.style.backgroundImage = `linear-gradient(160deg, color-mix(in srgb, var(--hd1, #2a1608) 82%, transparent), color-mix(in srgb, var(--hd2, #5a2d0c) 62%, transparent) 55%, color-mix(in srgb, var(--hd1, #2a1608) 90%, transparent)), url("${bannerImg(t)}")`;
   $head.style.backgroundSize = 'cover'; $head.style.backgroundPosition = 'center';
   const pw = UNIT(t) === 'Pemain' ? 'Pemain' : UNIT(t);
-  const tabs = [['tetapan', '⚙️', 'Tetapan'], ['pemain', '👥', UNIT(t)], ['langsung', '🟢', 'Langsung'], ['jadual', '📋', 'Jadual'],
+  const tabs = [...(canAdmin(t) ? [['tetapan', '⚙️', 'Tetapan']] : []), ['pemain', '👥', UNIT(t)], ['langsung', '🟢', 'Langsung'], ['jadual', '📋', 'Jadual'],
     ['kumpulan', '📊', E.isMixer(t) ? 'Individu' : t.format === 'rr' ? 'Liga' : 'Kumpulan'], ['keputusan', '📝', 'Keputusan']];
   if (t.format !== 'rr') tabs.push(['kalahmati', '⚔️', 'Knockout']);
   if (t.format === 'group_ko' && t.pool && t.pool !== '0') tabs.push(['pool', '🥉', 'Pool']);
@@ -440,7 +504,9 @@ function playBracketDraw(t, b) {
 // ---------- Laman utama ----------
 let _homeClub = '', _drwKeep = false;
 function viewHome() {
-  const all = store.list().map(E.migrate).filter(t => store.isLocal(t.id) || store.canAdmin(t.id) || !isHidden(t));
+  // Admin (bukan pemilik): hanya pertandingan yang diurusnya (pengurus utama / co-admin) — kelab lain tidak dipaparkan
+  const scoped = effRole() === 'admin';
+  const all = store.list().map(E.migrate).filter(t => scoped ? store.isLocal(t.id) || canAdmin(t) : (!asPeserta() && store.isLocal(t.id)) || canAdmin(t) || !isHidden(t));
   const clubs = [...new Map(all.filter(t => t.clubId && CLUBS[t.clubId]).map(t => [t.clubId, CLUBS[t.clubId].short])).entries()];
   if (_homeClub && !clubs.some(([k]) => k === _homeClub)) _homeClub = '';
   const list = all.filter(t => !_homeClub || t.clubId === _homeClub);
@@ -462,8 +528,8 @@ function viewHome() {
       t.regCond ? `<span class="tg">${esc(condShort(t.regCond))}</span>` : '',
       store.isCloud(t.id) && isHidden(t) ? '<span class="tg mute">🙈 Tersembunyi</span>' : '',
       store.isLocal(t.id) ? '<span class="tg mute">📱 Peranti ini</span>' : '',
-      cloud.isAdmin() ? `<span class="tg mute">👤 ${esc((cloud.managerOf(t.id) || {}).name || (t.createdBy ? t.createdBy.name : 'pencipta tidak direkod'))}</span>` : '',
-      cloud.isAdmin() && store.isCloud(t.id) && !canAdmin(t) ? '<span class="tg mute">👁️ Lihat sahaja</span>' : '',
+      isAdm() ? `<span class="tg mute">👤 ${esc((cloud.managerOf(t.id) || {}).name || (t.createdBy ? t.createdBy.name : 'pencipta tidak direkod'))}</span>` : '',
+      isAdm() && store.isCloud(t.id) && !canAdmin(t) ? '<span class="tg mute">👁️ Lihat sahaja</span>' : '',
     ].join('');
     return `<div class="hc">
       <a class="hc-thumb" href="#/t/${t.id}">${own ? `<img src="${own}" alt="">` : `<span class="hc-logo">${c.thumb || c.logos[0] ? `<img src="${esc(c.thumb || c.logos[0])}" alt="">` : '⚪'}</span>`}</a>
@@ -473,14 +539,14 @@ function viewHome() {
         <div class="hc-meta">${esc(c.short || '—')} · ${E.isTeam(t) ? esc(E.teamWord(t)) : ENTRY_SHORT[t.entryMode]}${venue ? ' · ' + esc(venue) : ''}</div>
         <div class="hc-tags">${tags}</div>
         <div class="hc-act">${regLive(t) ? `<a class="pill-btn orange small" href="#/daftar/${t.id}"><span class="dot"></span>Daftar →</a>` : ''}<a class="pill-btn light small" href="#/t/${t.id}">Lihat</a>
-          ${store.isLocal(t.id) && cloud.isAdmin() ? `<button class="pill-btn small light" data-up="${t.id}">☁️ Pindah ke awan</button>` : ''}
-          ${isTestT(t) && store.canAdmin(t.id) ? `<button class="pill-btn small no" data-tdel="${t.id}">🗑 Padam</button>` : ''}</div>
+          ${store.isLocal(t.id) && isAdm() ? `<button class="pill-btn small light" data-up="${t.id}">☁️ Pindah ke awan</button>` : ''}
+          ${isTestT(t) && canAdmin(t) ? `<button class="pill-btn small no" data-tdel="${t.id}">🗑 Padam</button>` : ''}</div>
       </div></div>`;
   };
   $app.innerHTML = `
     ${section('Carrom Portal', 'Pertandingan')}
     <p class="muted small" style="margin-top:-6px">${cloud.state.failed ? '📴 Tidak dapat menyambung ke awan. Hanya data dalam peranti ini dipaparkan.' : cloud.state.tournaments ? (cloud.state.offline ? '📴 Luar talian — memaparkan salinan terakhir' : '☁️ Disambung ke awan') : '⏳ Menyambung ke awan…'}</p>
-    ${cloud.isAdmin() || cloud.state.failed || !cloud.state.ready ? `<div class="row" style="margin-bottom:14px"><a class="pill-btn orange" href="#/baru"><span class="dot"></span>Pertandingan baharu</a></div>` : ''}
+    ${isAdm() || cloud.state.failed || !cloud.state.ready ? `<div class="row" style="margin-bottom:14px"><a class="pill-btn orange" href="#/baru"><span class="dot"></span>Pertandingan baharu</a></div>` : ''}
     ${clubs.length > 1 ? `<div class="hc-chips"><button class="chip ${!_homeClub ? 'on' : ''}" data-hclub="">Semua kelab</button>${clubs.map(([k, n]) => `<button class="chip ${_homeClub === k ? 'on' : ''}" data-hclub="${k}">${esc(n)}</button>`).join('')}</div>` : ''}
     ${(_homeClub || clubs.length === 1) && store.isCloud && (_homeClub || clubs[0][0]) !== 'sendiri' ? (() => { const k = _homeClub || clubs[0][0], on = subs.includes(k) && notifOn(); return `<div class="hc-sub"><span>${on ? '🔔' : '🔕'} ${on ? 'Anda akan dimaklumkan bila' : 'Dapatkan notifikasi bila'} <b>${esc(CLUBS[k].short)}</b> membuka pendaftaran</span><button class="pill-btn small ${on ? 'light' : 'brand'}" data-csub="${k}">${on ? 'Berhenti' : 'Langgan'}</button></div>`; })() : ''}
     ${mine.length ? `<div class="section-title">📝 Pertandingan saya</div><div class="my-list">${mine.map(t => `<a class="my-item" href="#/daftar/${t.id}"><b>${esc(t.name)}</b><span>${esc(fmtDate(t.date) || '')} · Lihat pendaftaran →</span></a>`).join('')}</div>` : ''}
@@ -544,7 +610,7 @@ function settingsFormAll(t, locked) {
     <div class="section-title" style="margin-top:0">Maklumat</div>
     <label>Nama pertandingan</label><input name="name" value="${esc(t.name)}" required>
     <div class="grid2">
-      <div><label>Kelab / Penganjur</label><select name="clubId">${opt({ ksasall: 'KSAS', kskpkpjb: 'KSKPKPJB', sendiri: '🙋 Persendirian (main santai)', lain: 'Lain-lain', '': '— Tiada —' }, clubOf(t).id)}</select></div>
+      <div><label>Kelab / Penganjur</label><select name="clubId">${opt(clubChoices(t), clubOf(t).id)}</select></div>
       <div><label>Tarikh</label><input name="date" type="date" value="${esc(t.date)}"></div>
       <div><label>Masa mula</label><input name="startTime" type="time" value="${esc(t.startTime)}"></div>
       <div><label>Minit setiap sesi</label><input name="sessionMin" type="number" min="10" max="90" step="5" value="${t.sessionMin}"></div>
@@ -680,17 +746,17 @@ function viewNew() {
   t.clubId = ls.get('carrom:lastClub') ?? 'ksasall';
   t.waGroup = (CLUBS[t.clubId] || {}).waGroup || '';
   $app.innerHTML = `${section('Pertandingan', 'Cipta baharu')}
-    <p class="notice small">${cloud.isAdmin() ? '☁️ Pertandingan ini akan disimpan di awan dan boleh dilihat semua orang.' : '📱 Anda belum log masuk sebagai admin, jadi pertandingan ini disimpan dalam peranti ini sahaja (sesuai untuk ujian). Ia boleh dipindah ke awan kemudian.'}</p>
-    <form class="card" id="f">${cloud.isAdmin() ? `<label class="test-chk"><input type="checkbox" id="isTest"> <span>🧪 <b>Pertandingan ujian</b><br><small class="muted">Disimpan di telefon ini sahaja, tidak dikongsi. Sesuai untuk mencuba tetapan, undian dan aliran skor.</small></span></label>` : ''}${settingsForm(t, false)}
+    <p class="notice small">${isAdm() ? '☁️ Pertandingan ini akan disimpan di awan dan boleh dilihat semua orang.' : '📱 Anda belum log masuk sebagai admin, jadi pertandingan ini disimpan dalam peranti ini sahaja (sesuai untuk ujian). Ia boleh dipindah ke awan kemudian.'}</p>
+    <form class="card" id="f">${isAdm() ? `<label class="test-chk"><input type="checkbox" id="isTest"> <span>🧪 <b>Pertandingan ujian</b><br><small class="muted">Disimpan di telefon ini sahaja, tidak dikongsi. Sesuai untuk mencuba tetapan, undian dan aliran skor.</small></span></label>` : ''}${settingsForm(t, false)}
       <div style="margin-top:18px" class="row"><button class="pill-btn orange"><span class="dot"></span>Seterusnya: peserta</button> <a href="#/" class="pill-btn light">Batal</a></div>
     </form>`;
   const f = document.getElementById('f');
   if (f) wireForm(f);
   if (f) f.onsubmit = async e => {
     e.preventDefault(); readSettings(f, t); await readLogo(f, t);
-    const test = !!(document.getElementById('isTest') || {}).checked || !cloud.isAdmin();
+    const test = !!(document.getElementById('isTest') || {}).checked || !isAdm();
     if (test) { t.test = true; if (!/ujian/i.test(t.name)) t.name += ' (Ujian)'; }
-    save(t, { forceCloud: cloud.isAdmin() && !test });
+    save(t, { forceCloud: isAdm() && !test });
     ls.set('carrom:lastClub', t.clubId);
     location.hash = `#/t/${t.id}/tetapan`;
   };
@@ -711,12 +777,13 @@ function viewParticipants(t) {
       <span class="muted small" style="text-align:right">${esc(E.isTeam(t) ? p.members.join(', ') : p.unit || '')}${t.hcMode === 'manual' && p.hc ? ` · HC ${p.hc}` : ''}</span></div>`).join('')}</div>` : '<p class="muted">Senarai belum diterbitkan.</p>'}
       ${E.usesDraw(t) && !E.isMixer(t) && t.participants.length ? '<div class="btn-stack" style="margin-top:12px"><button class="pill-btn" id="playU"><span class="dot"></span>▶ Tonton undian</button></div>' : ''}
     </div>
+    <details class="info-fold"${location.hash.endsWith('/peraturan') ? ' open' : ''}><summary class="section-title">ℹ️ Maklumat &amp; Peraturan</summary>${infoHtml(t)}</details>
     <p class="muted small">Penganjur: tekan <b>Log masuk</b> di atas untuk mengurus pertandingan ini.</p>`;
   const pu = document.getElementById('playU'); if (pu) pu.onclick = () => playUnitDraw(t);
 }
 
 function viewSetupCore(t, part = 'tetapan') {
-  if (!canAdmin(t)) return part === 'pemain' ? viewParticipants(t) : viewInfo(t);
+  if (!canAdmin(t)) return viewParticipants(t);   // tetapan disembunyikan daripada peserta, penonton & pengesah
   const locked = t.stage !== 'setup';
   const unit = UNIT(t), draw = E.usesDraw(t);
   const plist = t.participants.length ? `<div class="tw"><table><thead><tr><th>#</th><th class="l">${unit}</th><th class="l">Unit</th>${t.hcMode === 'manual' ? '<th>HC</th>' : ''}</tr></thead><tbody>
@@ -799,16 +866,16 @@ function viewSetupCore(t, part = 'tetapan') {
       <div class="row" style="gap:6px;flex-wrap:wrap"><button type="button" class="pill-btn orange small" id="pinWa"><span class="dot"></span>💬 Kongsi ke group WhatsApp</button><button type="button" class="pill-btn light small" id="pinCopy">📋 Salin mesej</button><button type="button" class="pill-btn light small" id="pinPrev">👁️ Lihat mesej</button></div>
       <p class="muted small" style="margin:6px 0 0">Mesej mengandungi pautan portal, cara pilih 👤 Saya untuk tahu status (bermain / pengadil / bersedia), notifikasi dan cara hantar keputusan dengan PIN.</p></div>
       <div class="card"><label class="test-chk" style="margin:0"><input type="checkbox" id="hideChk" ${isHidden(t) ? 'checked' : ''}> <span>🙈 <b>Sembunyikan dari senarai awam</b><br><small class="muted">Peserta tidak nampak di laman utama, tetapi pautan terus masih boleh dibuka.</small></span></label></div>`
-      : `<div class="notice">📱 Pertandingan ini disimpan dalam peranti ini sahaja. ${cloud.isAdmin() ? '<button class="pill-btn small brand" id="upNow">☁️ Pindah ke awan</button>' : 'Log masuk sebagai admin untuk memindahkannya ke awan supaya semua orang boleh melihat dan menghantar skor.'}</div><br>`}
+      : `<div class="notice">📱 Pertandingan ini disimpan dalam peranti ini sahaja. ${isAdm() ? '<button class="pill-btn small brand" id="upNow">☁️ Pindah ke awan</button>' : 'Log masuk sebagai admin untuk memindahkannya ke awan supaya semua orang boleh melihat dan menghantar skor.'}</div><br>`}
     ${canAdmin(t) ? `<div class="card owner-card"><div class="section-title" style="margin-top:0">👤 Rekod pentadbir</div>
       <p class="small" style="margin:0">Dicipta oleh: <b>${esc(t.createdBy ? t.createdBy.name : 'tidak direkod')}</b>${t.createdBy && t.createdBy.at ? ` · ${esc(new Date(t.createdBy.at).toLocaleString('ms-MY', { dateStyle: 'medium', timeStyle: 'short' }))}` : ''}</p>
       ${t.lastEdit ? `<p class="small" style="margin:4px 0 0">Kemas kini terakhir: <b>${esc(t.lastEdit.name)}</b> · ${esc(new Date(t.lastEdit.at).toLocaleString('ms-MY', { dateStyle: 'medium', timeStyle: 'short' }))}</p>` : ''}
       ${!t.createdBy ? '<p class="muted small" style="margin:4px 0 0">Pertandingan ini dicipta sebelum rekod pencipta wujud.</p>' : ''}
       ${store.isCloud(t.id) ? `<p class="small" style="margin:8px 0 0">Diurus oleh: <b>${esc((cloud.managerOf(t.id) || {}).name || (cloud.managerOf(t.id) ? cloud.managerOf(t.id).email.split('@')[0] : 'Pemilik sahaja'))}</b></p>` : ''}
-      ${store.isCloud(t.id) && cloud.state.role === 'owner' ? `<label style="margin-top:8px">Serahkan pengurusan kepada admin</label><select id="mgrSel"><option value="">— memuatkan senarai admin… —</option></select>
+      ${store.isCloud(t.id) && effRole() === 'owner' ? `<label style="margin-top:8px">Serahkan pengurusan kepada admin</label><select id="mgrSel"><option value="">— memuatkan senarai admin… —</option></select>
         <p class="muted small" style="margin:4px 0 0">Hanya admin yang mengurus (dan anda sebagai pemilik) boleh mengubah pertandingan ini. Admin lain boleh melihat sahaja.</p>` : ''}</div>` : ''}
-    ${store.isCloud(t.id) && cloud.isMainManager(t.id) ? coAdminCard(t) : store.isCloud(t.id) && canAdmin(t) && !cloud.isAdmin() ? '<div class="notice small">👥 Anda <b>admin bersama</b> untuk pertandingan ini.</div>' : ''}
-    ${store.isCloud(t.id) && cloud.isAdmin() && !canAdmin(t) ? `<div class="notice">👁️ <b>Lihat sahaja.</b> Pertandingan ini diurus oleh ${esc((cloud.managerOf(t.id) || {}).name || 'admin lain')}. Hanya pengurusnya dan pemilik boleh membuat perubahan.</div>` : ''}
+    ${store.isCloud(t.id) && cloud.isMainManager(t.id) ? coAdminCard(t) : store.isCloud(t.id) && canAdmin(t) && !isAdm() ? '<div class="notice small">👥 Anda <b>admin bersama</b> untuk pertandingan ini.</div>' : ''}
+    ${store.isCloud(t.id) && isAdm() && !canAdmin(t) ? `<div class="notice">👁️ <b>Lihat sahaja.</b> Pertandingan ini diurus oleh ${esc((cloud.managerOf(t.id) || {}).name || 'admin lain')}. Hanya pengurusnya dan pemilik boleh membuat perubahan.</div>` : ''}
     ${extrasCard(t)}
     ${testTools(t)}
     <div class="card noprint"><button class="pill-btn danger small" id="del">Padam pertandingan</button></div>`;
@@ -1048,7 +1115,9 @@ function wirePending(t, root = $app) {
       const part = sub.rubbers.some(x => !x.length) && sub.rubbers.some(x => x.length);
       E.recordScore(t, m.id, part ? sub.rubbers.map((x, i) => (x.length ? x : (m.rubbers[i] || {}).sets || [])) : sub.rubbers, { lineup: part ? { ...(m.lineup || {}), ...(sub.lineup || {}) } : sub.lineup || m.lineup });
       E.planSchedule(t); LV.afterScore(t);
+      let before = null; try { if (PUSH.pushAvailable()) before = store.get(t.id); } catch {}
       await store.save(t);
+      if (before) try { pushStatusDiff(E.migrate(before), t); } catch (e) { console.warn(e); }
       await cloud.deleteSubmission(t.id, sub.id);
       ls.set('carrom:draft:' + m.id, null);
       toast(m.status === 'done' ? `✓ Disahkan · ${E.pname(t, m.winner) || 'Seri'}` : '✓ Disahkan (belum tamat)');
@@ -1324,7 +1393,7 @@ function viewMatch(t, mid) {
   };
   const tgh = document.getElementById('tgh');
   if (tgh) tgh.onclick = () => {
-    if (!confirm('Tangguh perlawanan ini? Ia diletak di hujung giliran' + (m.lt ? ' dan papan diberi kepada perlawanan seterusnya.' : '.'))) return;
+    if (!confirm('Tangguh perlawanan ini? Ia diletak di hujung giliran' + (m.lt ? ' dan papan diberi kepada perlawanan seterusnya (jika tiada, papan dibiarkan kosong). Perlawanan ini tidak diagih semula sekurang-kurangnya 5 minit.' : '.'))) return;
     LV.defer(t, m.id); save(t); toast('Ditangguh ke hujung giliran'); location.hash = `#/t/${t.id}/${_back}`;
   };
   const cl = document.getElementById('clear');
@@ -1353,7 +1422,7 @@ function standingsTable(t, g) {
     <tbody>${s.map((r, i) => `<tr class="${i < q ? 'q' : i < q + poolN ? 'pq' : ''}"><td>${i + 1}</td><td class="l">${E.usesDraw(t) ? pnUnit(t, r.id) : pn(t, r.id)}</td>
       <td>${r.p}</td><td>${r.w}</td>${team ? `<td>${r.d}</td>` : ''}<td>${r.l}</td><td><b>${r.pts}</b></td><td>${sign(r.sf - r.sa)}<div class="st-sub">${r.sf}-${r.sa}</div></td></tr>`).join('')}</tbody></table></div>`;
 }
-function matrixHtml(t, g) {
+function matrixHtml(t, g, noCap, pts) {
   const M = E.matrix(t, g.name), st = E.groupStandings(t, g.name);
   return `<div class="tw"><table class="mx"><thead><tr><th class="l">${UNIT(t)}</th>${M.ids.map((_, i) => `<th>${i + 1}</th>`).join('')}<th>Mata</th></tr></thead><tbody>
     ${M.ids.map((id, i) => { const r = st.find(x => x.id === id); const d = r.sf - r.sa; return `<tr><td class="l">${i + 1}. ${esc(E.pname(t, id))}</td>${M.rows[i].map(c => c === 'self' ? '<td class="self"></td>' : c ? `<td class="${c.win ? 'win' : ''}">${c.v[0]}-${c.v[1]}</td>` : '<td>·</td>').join('')}<td><b>${r.pts}</b></td></tr>`; }).join('')}
@@ -1402,8 +1471,8 @@ function viewMixStandings(t) {
     <div class="card"><div class="tw"><table class="mx-st"><thead><tr><th>#</th><th class="l">Pemain</th><th>Main</th><th>M</th><th>K</th><th>±Game</th><th>±Skor</th><th>Mata</th></tr></thead><tbody>
     ${S.map((r, i) => `<tr><td>${i + 1}</td><td class="l"><details class="mx-d"><summary><b>${nm(r.id)}</b>${E.levelOf(t, E.pname(t, r.id)) && E.levelInfo(t, E.levelOf(t, E.pname(t, r.id))) ? ` <span class="muted small">${esc(E.levelInfo(t, E.levelOf(t, E.pname(t, r.id)))[1])}</span>` : ''}</summary>
       ${r.with.length ? `<div class="mx-w">${r.with.map(w => `<span class="${w.draw ? '' : w.win ? 'ok' : 'no'}">P${w.mr} · ${nm(w.mate)} · ${w.draw ? 'Seri' : w.win ? 'Menang' : 'Kalah'} ${w.s}</span>`).join('')}</div>` : '<span class="muted small">Belum bermain</span>'}</details></td>
-      <td>${r.p}</td><td>${r.w}</td><td>${r.l}</td><td>${sgn(r.sf - r.sa)}</td><td>${sgn(r.pf - r.pa)}</td><td><b>${r.pts}</b></td></tr>`).join('')}
-    </tbody></table></div></div>
+      <td>${r.p}</td><td>${r.w}</td><td>${r.l}</td><td>${sgn(r.sf - r.sa)}<small class="tot">${r.sf}-${r.sa}</small></td><td>${sgn(r.pf - r.pa)}<small class="tot">${r.pf}-${r.pa}</small></td><td><b>${r.pts}</b></td></tr>`).join('')}
+    </tbody></table></div><p class="muted small" style="margin:6px 0 0">Angka kecil = jumlah menang-kalah (set, dan mata permainan).</p></div>
     ${mixMatrix(t, S)}
     ${done >= 3 ? `<div class="card">${mixAwards(t, S).replace('<section class="rp-sec pb">', '<div>').replace('</section>', '</div>').replace('<h3>', '<h3 style="margin-top:0">')}</div>` : ''}
     <div class="row" style="margin:0 0 12px"><button class="pill-btn small" data-mxp="1"><span class="dot"></span>▶ Tonton undian</button></div>
@@ -1596,7 +1665,7 @@ function viewPool(t) {
 function viewRanking(t) { $app.innerHTML = rankingHtml(t); }
 const RANK_NOTE = '<b>Tempat</b> = pusingan terakhir yang dicapai (kalah mati utama, kemudian pool kalah); yang tersingkir di pusingan sama berkongsi Tempat. Dalam Tempat yang sama disusun ikut <b>(a)</b> game ±/main, kemudian <b>(b)</b> game menang/main. <b>†</b> bersemuka. Butiran penuh di bahagian Peraturan.';
 const RANK_RULE = 'Penentuan ranking akhir: Tempat ialah pusingan terakhir yang dicapai, kalah mati utama dahulu, kemudian pool kalah; yang tersingkir di pusingan yang sama berkongsi Tempat (contoh 5–8). Dalam Tempat yang sama, peserta disusun ikut (a) game ±/main = (game menang − game kalah) ÷ main, kemudian (b) game menang/main (dipaparkan hanya jika (a) sama). Main = perlawanan dimainkan (kumpulan, kalah mati dan pool; BYE tidak dikira). Bersemuka (†): jika rakan sekumpulan berada dalam Tempat yang sama, yang lebih tinggi dalam kumpulan diletakkan terus di atas rakan sekumpulannya.';
-function rankingHtml(t) {
+function rankingHtml(t, brief) {
   if (t.stage !== 'done') return `${section('Ranking', 'Ranking Peserta')}<div class="card"><p class="muted">Ranking dipaparkan selepas perlawanan akhir tamat${t.rounds.pool ? ' (dan akhir pool kalah)' : ''}.</p></div>`;
   const rank = E.finalRanking(t);
   const showB = new Set();
@@ -1606,20 +1675,20 @@ function rankingHtml(t) {
   let n = 0;
   return `
     ${section('Keputusan akhir', 'Ranking Peserta')}
-    ${ko && ko.winner ? `<div class="champ">🏆 Johan: ${esc(E.pname(t, ko.winner))}</div>` : ''}
+    ${ko && ko.winner && !brief ? `<div class="champ">🏆 Johan: ${esc(E.pname(t, ko.winner))}</div>` : ''}
     <div class="card"><div class="print-only club-head">${logosHtml(t)}<div><b>${esc(t.name)}</b><br><span class="muted">${esc(clubOf(t).name)}</span></div></div>
     <div class="tw"><table class="rank"><thead><tr><th>#</th><th>Tempat*</th><th class="l">${UNIT(t)}</th><th class="l">Pencapaian</th><th>Kump.</th><th>Main</th><th>Game</th><th>(a)</th><th>(b)</th></tr></thead><tbody>
       ${rank.map(tr => tr.rows.map(r => `<tr><td>${++n}</td><td>${tr.ids.length > 1 ? `${tr.place}–${tr.place + tr.ids.length - 1}` : tr.place}</td>
         <td class="l">${pn(t, r.id)}</td><td class="l small">${esc(r.label)}</td><td>${esc(E.seedLabel(t, r.id))}${r.bumped ? ' <span class="dag">†</span>' : ''}</td>
         <td>${r.st.p}</td><td>${r.st.sf}-${r.st.sa}</td><td>${r.st.a === 0 ? '0.00' : sign(r.st.a)}</td><td>${showB.has(r.id) ? r.st.b.toFixed(2) : ''}</td></tr>`).join('')).join('')}
     </tbody></table></div>
-    <div class="foot">
+    ${brief ? `<div class="foot"><p>* ${RANK_NOTE}</p></div>` : `<div class="foot">
       <p>* <b>Tempat:</b> pusingan terakhir yang dicapai, kalah mati utama dahulu, kemudian pool kalah. Yang tersingkir di pusingan yang sama berkongsi Tempat (contoh 5–8).</p>
       <p><b>#:</b> dalam Tempat yang sama disusun ikut (a), kemudian (b).</p>
       <p><b>†</b> Bersemuka: jika rakan sekumpulan berada dalam Tempat yang sama, pemain yang lebih tinggi dalam kumpulan diletakkan terus di atas rakan sekumpulannya.</p>
       <p><b>Main:</b> perlawanan dimainkan (kumpulan, kalah mati dan pool; BYE tidak dikira). <b>(a)</b> Game ±/main = (game menang − game kalah) ÷ main. <b>(b)</b> Game menang/main, dipaparkan hanya jika (a) sama. Purata = jumlah ÷ bilangan perlawanan, bukan nisbah.</p>
-    </div></div>
-    <a class="pill-btn light small noprint" href="#/t/${t.id}/laporan">🖨️ Laporan PDF</a>`;
+    </div>`}</div>
+    <a class="pill-btn light small noprint" href="#/t/${t.id}/laporan">${canAdmin(t) ? '🖨️ Laporan PDF' : '📄 Lihat laporan'}</a>`;
 }
 
 // ---------- Peraturan & panduan ----------
@@ -1702,13 +1771,14 @@ function rosterOf(t) {
   return out;
 }
 function levelsCard(t) {
-  const S = E.HC_SCHEMES[t.hcMode]; if (!S) return '';
+  const S = E.HC_SCHEMES[E.lvScheme(t)]; if (!S) return '';
   const P = personsOf(t); if (!P.length) return '';
+  const hcOn = !!E.HC_SCHEMES[t.hcMode];   // tahap untuk handicap, atau hanya untuk imbang regu (regu bertukar)
   const admin = canAdmin(t), missing = P.filter(n => !E.levelOf(t, n)).length;
   const chip = c => { const L = E.levelInfo(t, c); return L ? `<span class="lv lv-${c}">${esc(L[1])}</span>` : '<span class="lv none">—</span>'; };
-  return `<details class="card fold" data-fold="lv" ${missing && admin ? 'open' : ''}><summary>🎚️ Tahap handicap · ${esc(S.name)}${missing ? ` <span class="role-chip">${missing} belum</span>` : ''}</summary>
+  return `<details class="card fold" data-fold="lv" ${missing && admin ? 'open' : ''}><summary>🎚️ ${hcOn ? 'Tahap handicap' : 'Tahap pemain (imbang regu)'} · ${esc(S.name)}${missing ? ` <span class="role-chip">${missing} belum</span>` : ''}</summary>
     <table class="lv-tab"><tr><th></th>${S.levels.map(l => `<th>${esc(l[1])}</th>`).join('')}</tr><tr><td>Single</td>${S.levels.map(l => `<td>${l[2]}</td>`).join('')}</tr><tr><td>Double</td>${S.levels.map(l => `<td>${l[3]}</td>`).join('')}</tr></table>
-    <p class="muted small">Pihak bernilai rendah mula dengan beza nilai. Double: jumlah dua ahli, maks. ${S.capD}.</p>
+    <p class="muted small">${hcOn ? `Pihak bernilai rendah mula dengan beza nilai. Double: jumlah dua ahli, maks. ${S.capD}.` : 'Tahap digunakan untuk mengimbangkan regu semasa undian (tiada mata handicap). Mod papan pantas menggunakannya serta-merta; jadual penuh perlu dijana semula selepas tahap diubah.'}</p>
     <div class="lv-list">${P.map(n => `<div class="lv-row"><span>${esc(n)}</span>${admin ? `<select data-lvn="${esc(n)}">${opt({ '': '— tahap —', ...Object.fromEntries(S.levels.map(l => [l[0], `${l[1]} (S${l[2]} · D${l[3]})`])) }, E.levelOf(t, n))}</select>` : chip(E.levelOf(t, n))}</div>`).join('')}</div></details>`;
 }
 // ---------- Pautan kongsi ----------
@@ -1952,8 +2022,9 @@ ${esc(t.regCond)}</div>` : ''}
   </div>`;
 }
 function wireReg(t) {
-  wireShare(t);
+  wireShare(t); wireProfileCard($app);
   const $ = id => document.getElementById(id);
+  if ($('rgMoreBtn')) $('rgMoreBtn').onclick = () => { $('rgMore').hidden = false; $('rgMoreBtn').parentElement.hidden = true; const sv = $('rgSave'); if (sv) sv.lastChild.textContent = 'Daftar sekarang'; };
   if ($('rgLogin')) $('rgLogin').onclick = async () => { try { await cloud.signInGoogle(); toast('Berjaya log masuk'); render(); } catch (e) { toast('Log masuk gagal: ' + (e.code || e.message)); } };
   $app.querySelectorAll('[data-rgedit]').forEach(b => (b.onclick = () => { _rgEdit = b.dataset.rgedit; render(); setTimeout(() => { const f = $('regForm'); if (f) f.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50); }));
   if ($('rgBack')) $('rgBack').onclick = () => { _rgEdit = null; render(); };
@@ -1970,13 +2041,13 @@ function wireReg(t) {
       const firstReg = !(cloud.state.regs[t.id] || []).some(r => r.uid === cloud.myUid());
       const data = { name, full: $('rgFull') ? $('rgFull').value.trim() : '', unit: $('rgUnit').value.trim(), level: $('rgLv') ? $('rgLv').value : '', partner: $('rgPartner') ? $('rgPartner').value.trim() : '', note: $('rgNote').value.trim() };
       await cloud.register(t.id, data, editId);
-      if (firstReg || (editId && editId === cloud.myUid())) ls.set('carrom:profile', JSON.stringify({ name: data.name, full: data.full, unit: data.unit, level: data.level }));
+      if (firstReg || (editId && editId === cloud.myUid())) setProfile({ name: data.name, full: data.full, unit: data.unit, level: data.level, partner: data.partner || profile().partner || '' });
       ls.set('carrom:myRegs', JSON.stringify([...new Set([t.id, ...myRegTids()])].slice(0, 30)));
       try { const L = JSON.parse(ls.get('carrom:regn:' + t.id) || '[]'); if (!L.includes(data.name)) L.push(data.name); ls.set('carrom:regn:' + t.id, JSON.stringify(L.slice(-10))); } catch {}
       _rgEdit = null;
       if (isNew) PUSH.send(['adm:' + t.id], '⚪ Pendaftaran baharu', `${name} · ${t.name} · ${new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit' })}`, `#/t/${t.id}/pemain`, 'reg-' + t.id + '-' + Date.now().toString(36));
       pushSync();
-      ls.set('carrom:regd:' + t.id, '1'); toast('✅ Pendaftaran dihantar. Menunggu pengesahan penganjur.', 3500);
+      ls.set('carrom:regd:' + t.id, '1'); toast('✅ Pendaftaran dihantar. Menunggu pengesahan penganjur.', 3500); render(true);
     } catch (e) { $('rgSave').disabled = false; toast(e.code === 'permission-denied' ? 'Pendaftaran sudah ditutup' : 'Gagal: ' + (e.code || e.message), 4000); }
   };
   $app.querySelectorAll('[data-rok],[data-rno]').forEach(b => (b.onclick = async () => {
@@ -2012,6 +2083,38 @@ function wireReg(t) {
 }
 // Profil mini (disimpan di telefon ini sahaja): isi borang secara automatik
 const profile = () => { try { return JSON.parse(ls.get('carrom:profile') || '{}'); } catch { return {}; } };
+const googleUser = () => { const u = cloud.state.user; return u && !u.anon ? u : null; };
+function setProfile(p) {
+  try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {}
+  ls.set('carrom:profile', JSON.stringify(p));
+  if (googleUser()) cloud.saveProfileCloud(p).catch(e => console.warn('profil', e));
+}
+// Selepas log masuk Google: pulihkan profil ke telefon baharu, atau simpan profil telefon ini ke akaun
+let _profUid = null;
+async function syncProfile() {
+  const u = googleUser(); if (!u || _profUid === u.uid) return; _profUid = u.uid;
+  try {
+    const c = await cloud.loadProfileCloud(), l = profile();
+    if (c && c.name && !l.name) { ls.set('carrom:profile', JSON.stringify({ name: c.name, full: c.full || '', unit: c.unit || '', level: c.level || '', partner: c.partner || '' })); toast(`👤 Profil ${c.name} dipulihkan`); pushSync(); softRender(); }
+    else if (l.name && (!c || ['name', 'full', 'unit', 'level', 'partner'].some(k => (c[k] || '') !== (l[k] || '')))) await cloud.saveProfileCloud(l);
+  } catch (e) { console.warn('profil', e); }
+}
+// Kad profil peserta: simpan dengan Google supaya ikut ke telefon baharu
+function profileCard(compact) {
+  const P = profile(), g = googleUser();
+  if (!P.name && !g) return `<div class="notice small prof-card"><div>Pernah simpan profil dengan Google di telefon lain?</div><button type="button" class="pill-btn light small" data-gprof>🔄 Pulihkan profil</button></div>`;
+  if (g) return `<div class="notice small prof-card">✅ <b>Profil disimpan dengan Google</b>${P.name ? ` · ${esc(P.name)}` : ''}<br><span class="muted">${esc(g.email)} · log masuk akaun ini di telefon baharu untuk memulihkan profil & pendaftaran.</span></div>`;
+  return `<div class="notice small prof-card"><div>👤 Profil <b>${esc(P.name)}</b> diingati di telefon ini sahaja.${compact ? '' : '<br><span class="muted">Simpan dengan Google supaya profil dan pendaftaran anda ikut ke telefon baharu. Pilihan, percuma.</span>'}</div>
+    <button type="button" class="pill-btn light small" data-gprof>🔒 Simpan dengan Google</button></div>`;
+}
+function wireProfileCard(root = document) {
+  root.querySelectorAll('[data-gprof]').forEach(b => (b.onclick = async () => {
+    b.disabled = true;
+    const had = !!profile().name;
+    try { await cloud.linkGoogle(); _profUid = null; await syncProfile(); if (had) toast('✅ Profil disimpan dengan Google'); else if (!profile().name) toast('Tiada profil tersimpan untuk akaun ini. Daftar sekali dan ia akan disimpan.', 4000); pushSync(); softRender(); }
+    catch (e) { toast('Gagal: ' + (e.code === 'auth/popup-closed-by-user' ? 'dibatalkan' : e.code || e.message)); b.disabled = false; }
+  }));
+}
 const myRegTids = () => { try { return JSON.parse(ls.get('carrom:myRegs') || '[]'); } catch { return []; } };
 let _rgEdit = null;
 function condTags(t) {
@@ -2030,18 +2133,24 @@ function viewDaftar(t) {
   const r = _rgEdit && _rgEdit !== 'new' ? mineList.find(x => x.id === _rgEdit) : null;
   const prof = profile(), first = !mineList.length;
   const lvOpts = S ? S.levels.filter(l => !(t.regLevels || []).length || t.regLevels.includes(l[0]) || (r && r.level === l[0])) : [];
+  const quick = first && !r && prof.name && (!S || !(t.regLevels || []).length || !prof.level || t.regLevels.includes(prof.level));
   const form = `<div class="reg-form" id="regForm">
       ${!first && !r ? '<div class="section-title" style="margin-top:0">➕ Daftar orang lain</div>' : ''}
+      ${quick ? `<div class="notice small quick-reg"><div>👤 <b>${esc(prof.name)}</b>${prof.full ? ` · ${esc(prof.full)}` : ''}${prof.unit ? `<br><span class="muted">${esc(prof.unit)}</span>` : ''}${S && prof.level ? ` <span class="muted">· ${esc(lvName(prof.level))}</span>` : ''}</div>
+        <button type="button" class="pill-btn light small" id="rgMoreBtn">✏️ Ubah</button></div>` : ''}
+      ${first && !r && !prof.name && !googleUser() ? profileCard() : ''}
+      <div id="rgMore" ${quick ? 'hidden' : ''}>
       <label>Nama penuh</label><input id="rgFull" maxlength="80" value="${esc(r ? r.full || '' : first ? prof.full || '' : '')}" placeholder="cth. Mohd Hazlan bin Mohd Haliman" autocomplete="${first ? 'name' : 'off'}">
       <label>Nama panggilan <small class="muted">(dipapar dalam jadual, undian & keputusan)</small></label><input id="rgName" maxlength="40" value="${esc(r ? r.name : first ? prof.name || '' : '')}" placeholder="cth. Hazlan">
       <label>Unit / Jabatan / Kumpulan (pilihan)</label><input id="rgUnit" maxlength="40" value="${esc(r ? r.unit : first ? prof.unit || '' : '')}">
       ${S ? `<label>Tahap</label><select id="rgLv">${opt({ '': '— pilih tahap —', ...Object.fromEntries(lvOpts.map(l => [l[0], l[1]])) }, r ? r.level : first ? prof.level || '' : '')}</select>` : ''}
-      ${t.entryMode === 'double' ? `<label>Nama pasangan</label><input id="rgPartner" maxlength="40" value="${esc(r ? r.partner : '')}">` : ''}
       <label>Catatan (pilihan)</label><input id="rgNote" maxlength="140" value="${esc(r ? r.note : '')}" placeholder="cth. no. telefon / saiz baju">
+      </div>
+      ${t.entryMode === 'double' ? `<label>Nama pasangan</label><input id="rgPartner" maxlength="40" value="${esc(r ? r.partner : first ? prof.partner || '' : '')}">` : ''}
       ${t.regCond ? `<label class="check" style="margin-top:10px"><input type="checkbox" id="rgCond" ${r ? 'checked' : ''}> <span>Saya memenuhi syarat penyertaan:<br><b style="white-space:pre-line">${esc(t.regCond)}</b></span></label>` : ''}
-      <button type="button" class="pill-btn orange big" id="rgSave" style="margin-top:14px;width:100%"><span class="dot"></span>${r ? 'Simpan perubahan' : 'Daftar sekarang'}</button>
+      <button type="button" class="pill-btn orange big" id="rgSave" style="margin-top:14px;width:100%"><span class="dot"></span>${r ? 'Simpan perubahan' : quick ? `Daftar sebagai ${esc(prof.name)}` : 'Daftar sekarang'}</button>
       ${_rgEdit ? '<button type="button" class="pill-btn light small" id="rgBack" style="margin-top:8px">Batal</button>' : ''}
-      <p class="muted small" style="margin-bottom:0">Tiada log masuk diperlukan. Pendaftaran disimpan untuk telefon ini, jadi anda boleh mengubah atau membatalkannya dari telefon yang sama.</p></div>`;
+      <p class="muted small" style="margin-bottom:0">Tiada log masuk diperlukan. Butiran anda diingati di telefon ini, jadi pendaftaran seterusnya hanya satu tekan, dan nama anda dikenal pasti secara automatik untuk notifikasi.</p></div>`;
   const info = [['📅', fmtDate(t.date)], ['⏰', t.startTime ? E.sessionTime(t, 1) : ''], ['📍', t.venue === 'X' ? t.venueName : E.VENUES[t.venue]],
     ['⚪', `${E.isTeam(t) ? E.teamWord(t) + (t.tieFormat === 'SSD' ? ' (Single + Single + Double)' : '') : ENTRY[t.entryMode]} · ${f[t.groupFormat].label}`],
     ['⚖️', t.hcMode === 'manual' ? 'Handicap' : S ? `Handicap ${S.name}` : ''], ['💰', t.regFee ? 'Yuran: ' + t.regFee : '']].filter(x => x[1]);
@@ -2063,7 +2172,7 @@ function viewDaftar(t) {
       <div class="section-title" style="margin-top:0">📝 ${mineList.length ? 'Pendaftaran dari telefon ini' : 'Daftar penyertaan'}</div>
       ${mineList.length ? `<div class="my-regs">${mineList.map(x => `<div class="notice small my-reg"><div><b>${esc(x.name)}</b>${x.partner ? ` &amp; ${esc(x.partner)}` : ''}${x.level ? ` <span class="muted">(${esc(lvName(x.level))})</span>` : ''}<br>${REG_ST[x.status][0]} ${x.status === 'pending' ? 'Menunggu pengesahan penganjur' : REG_ST[x.status][1]}</div>
         ${regOn(t) ? `<div class="row" style="gap:6px"><button type="button" class="pill-btn light small" data-rgedit="${x.id}">Ubah</button><button type="button" class="pill-btn light small" data-rgcancel="${x.id}">Batal</button></div>` : ''}</div>`).join('')}
-        ${mineList.some(x => x.status === 'pending') ? notifBtn('🔔 Beritahu bila disahkan') : ''}</div>` : ''}
+        ${mineList.some(x => x.status === 'pending') ? notifBtn('🔔 Beritahu bila disahkan') : ''}${profileCard()}</div>` : ''}
       ${showForm ? form : full && !mineList.length ? '<p class="notice">Maaf, tempat sudah penuh.</p>' : !regOn(t) && !mineList.length ? '<p class="muted">Pendaftaran telah ditutup.</p>' : ''}
       ${regOn(t) && !full && mineList.length && !_rgEdit && mineList.length < 10 ? '<button type="button" class="pill-btn light" data-rgedit="new" style="margin-top:10px">➕ Daftar orang lain (keluarga / rakan)</button>' : ''}
     </div>
@@ -2077,6 +2186,7 @@ function viewDaftar(t) {
   wireReg(t);
 }
 function viewPemain(t) {
+  if (!canAdmin(t)) return viewParticipants(t);   // peserta/penonton/pengesah: senarai, maklumat & peraturan sahaja
   viewSetupCore(t, 'pemain');
   const rc = regCard(t);
   if (rc) { const h = $app.querySelector('.h-big'); h ? h.insertAdjacentHTML('afterend', rc) : $app.insertAdjacentHTML('afterbegin', rc); wireReg(t); }
@@ -2090,10 +2200,9 @@ function viewPemain(t) {
   $app.insertAdjacentHTML('beforeend', `<details class="card fold" style="margin-top:14px"><summary>📜 Peraturan &amp; panduan peserta</summary>${rulesHtml(t)}</details>`);
 }
 // Tetapan untuk bukan admin: ringkasan maklumat pertandingan + peraturan
-function viewInfo(t) {
+function infoHtml(t) {
   const f = E.SET_FORMATS;
-  $app.innerHTML = `${section('Tetapan', 'Maklumat Pertandingan')}
-    ${(t.attachments || []).length ? `<div class="card"><div class="section-title" style="margin-top:0">📎 Lampiran</div>${attachLinks(t)}</div>` : ''}
+  return `${(t.attachments || []).length ? `<div class="card"><div class="section-title" style="margin-top:0">📎 Lampiran</div>${attachLinks(t)}</div>` : ''}
     <div class="card"><table class="rp-info">
       <tr><td>Tarikh</td><td>${esc(fmtDate(t.date) || '-')}</td></tr>
       <tr><td>Mula</td><td>${esc(E.sessionTime(t, 1))} · ${t.sessionMin} minit setiap sesi</td></tr>
@@ -2104,8 +2213,7 @@ function viewInfo(t) {
       <tr><td>Set</td><td>${esc(f[t.groupFormat].label)}${t.format === 'group_ko' ? ' · Kalah mati: ' + esc(f[t.koFormat].label) : ''}</td></tr>
       ${t.format === 'group_ko' ? `<tr><td>Pool kalah</td><td>${esc(POOL[t.pool])}</td></tr>` : ''}
     </table></div>
-    ${infoCard(t)}<div class="section-title">📜 Peraturan</div>${rulesHtml(t)}
-    <p class="muted small">Penganjur: tekan <b>Log masuk</b> di atas untuk mengurus pertandingan ini.</p>`;
+    <div class="section-title">📜 Peraturan</div>${rulesHtml(t)}`;
 }
 
 // ---------- Panduan peserta (kad lipat di atas setiap tab) ----------
@@ -2150,16 +2258,18 @@ const GUIDE = {
   },
   kalahmati: { penonton: ['Carta cermin terisi sebaik kedudukan kumpulan pasti, jadi kalah mati boleh bermula lebih awal.'], penganjur: ['Carta terisi sendiri. Bila tamat: 🏆 Kongsi poster juara.'] },
   pool: { penonton: ['Pool kalah untuk peserta yang tidak layak ke kalah mati utama.'] },
-  laporan: { penonton: ['Tekan <b>🖨️ Cetak / Simpan PDF</b>, kemudian pilih <b>Simpan sebagai PDF</b>.'] },
+  laporan: { penonton: ['Laporan dibuka selepas semua perlawanan tamat. Laporan rasmi (PDF), video ringkasan dan ringkasan WhatsApp dikongsi oleh penganjur.'], penganjur: ['Tekan <b>🖨️ Cetak / Simpan PDF</b>, kemudian pilih <b>Simpan sebagai PDF</b>.', '🎬 Video ringkasan dan 💬 ringkasan WhatsApp hanya untuk penganjur & co-admin.'] },
 };
 const roleOf = t => canAdmin(t) ? 'penganjur' : canEdit(t) ? 'pengesah' : ls.get('carrom:scorer:' + t.id) ? 'pengadil' : (ls.get(meKey(t)) || ls.get('carrom:regd:' + t.id)) ? 'peserta' : 'penonton';
 function guideCard(t, page) {
   const g = GUIDE[page]; if (!g) return;
   const open = ls.get('carrom:guide') === '1';
-  let role = ls.get('carrom:guideRole:' + t.id) || roleOf(t); if (!ROLES[role]) role = 'penonton';
+  // Peranan yang boleh dipilih ikut kuasa sebenar (paparan peserta: penonton/peserta/pengadil sahaja)
+  const allow = canAdmin(t) ? Object.keys(ROLES) : canEdit(t) ? ['penonton', 'peserta', 'pengadil', 'pengesah'] : ['penonton', 'peserta', 'pengadil'];
+  let role = ls.get('carrom:guideRole:' + t.id); if (!allow.includes(role)) role = roleOf(t); if (!allow.includes(role)) role = 'penonton';
   const items = g[role] || g.penonton || [];
   const html = `<details class="card fold guide noprint" ${open ? 'open' : ''}><summary>📖 Panduan · ${ROLES[role]}</summary>
-    <div class="g-roles">${Object.entries(ROLES).map(([k, v]) => `<button type="button" class="chip ${k === role ? 'on' : ''}" data-grole="${k}">${v}</button>`).join('')}</div>
+    <div class="g-roles">${Object.entries(ROLES).filter(([k]) => allow.includes(k)).map(([k, v]) => `<button type="button" class="chip ${k === role ? 'on' : ''}" data-grole="${k}">${v}</button>`).join('')}</div>
     <ul class="g-list">${items.map(x => `<li>${x}</li>`).join('')}</ul>
     ${!g[role] && role !== 'penonton' ? '<p class="muted small" style="margin:4px 0 0">Tiada tindakan khas untuk peranan ini di halaman ini.</p>' : ''}</details>`;
   const old = $app.querySelector('details.guide'); if (old) old.remove();
@@ -2267,17 +2377,22 @@ const STAT = {
 // Syarat ringkas untuk label kecil (baris pertama, maks 60 aksara)
 const condShort = c => { const f = String(c || '').split('\n')[0].trim(); return f.length > 60 || String(c).includes('\n') ? f.slice(0, 57).trim() + '…' : f; };
 const normN = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+let _amQuiet = false;
+function autoMeQuiet(t) { _amQuiet = true; try { autoMe(t); } finally { _amQuiet = false; } }
 function autoMe(t) {
   if (ls.get(meKey(t)) || ls.get('carrom:meSet:' + t.id) || canAdmin(t)) return; // pilihan sendiri ("Saya ialah…") sentiasa diutamakan
   let names = []; try { names = JSON.parse(ls.get('carrom:regn:' + t.id) || '[]'); } catch {}
   // nama terkini dalam dokumen pendaftaran saya (cth. selepas penganjur mengubah nama)
   const uid = cloud.myUid && cloud.myUid(); if (uid) (cloud.state.regs[t.id] || []).filter(r => r.uid === uid).forEach(r => names.unshift(r.name));
-  if (!names.length && ls.get('carrom:regd:' + t.id) && profile().name) names = [profile().name];
-  if (!names.length) return;
-  const want = names.map(normN);
-  const pool = E.isMixer(t) ? t.individuals.map(x => [x.id, [x.name]]) : t.participants.map(p => [p.id, [p.name, ...(p.members || [])]]);
-  const hit = pool.find(([, ns]) => ns.some(n => want.includes(normN(n))));
-  if (hit) { ls.set(meKey(t), hit[0]); ls.set('carrom:meAuto:' + t.id, '1'); pushSync(); }
+  const pool = E.isMixer(t) ? (t.individuals || []).map(x => [x.id, [x.name]]) : (t.participants || []).map(p => [p.id, [p.name, ...(p.members || [])]]);
+  let hit = null;
+  if (names.length) { const want = names.map(normN); hit = pool.find(([, ns]) => ns.some(n => want.includes(normN(n)))); }
+  else { // tiada pendaftaran dari telefon ini: cuba profil (nama penuh dahulu; nama panggilan hanya jika padanan tunggal)
+    const P = profile(), byName = n => { const w = normN(n); return w ? pool.filter(([, ns]) => ns.some(x => normN(x) === w)) : []; };
+    const f = byName(P.full), k = byName(P.name);
+    hit = f.length === 1 ? f[0] : k.length === 1 ? k[0] : null;
+  }
+  if (hit) { ls.set(meKey(t), hit[0]); ls.set('carrom:meAuto:' + t.id, '1'); if (!_amQuiet) pushSync(); }
 }
 // Amaran dalam aplikasi bila status saya berubah (bermain / pengadil / bersedia) — getar, bunyi & sepanduk
 const _myLast = {};
@@ -2576,7 +2691,7 @@ function viewLiveScore(t, mid0) {
   let S = null; try { S = JSON.parse(ls.get(key) || 'null'); } catch {}
   let takeNote = other && edit ? `<div class="notice">🎯 Sedang dijaga oleh <b>${esc(remote.by || 'penjaga lain')}</b>. Jika anda tekan mata di sini, anda mengambil alih.</div>` : '';
   if (other && edit) S = null;
-  if (!S && remote) S = { ri: remote.ri, rs: remote.rs.map(r => r.map(g => [...g])), cur: [...remote.cur], swap: !!remote.sw };
+  if (!S && remote) S = { ri: remote.ri, rs: remote.rs.map(r => r.map(g => [...g])), cur: remote.cur.slice(0, 2), swap: !!remote.sw };
   if (!S) { const rs = m.rubbers.map(r => r.sets.map(g => [...g])); let ri = split ? only : rs.findIndex((s, i) => !away(i) && !lsRubberDone(t, m, s)); if (ri < 0) ri = nR - 1; S = { ri, rs, cur: lsStart(t, m, ri), swap: false }; }
   while (S.rs.length < nR) S.rs.push([]);
   if (S.lu) m.lineup = { ...(m.lineup || {}), ...S.lu };
@@ -2627,6 +2742,7 @@ function viewLiveScore(t, mid0) {
     const el = $app.querySelector(`.sb-side.s${k}`); if (el) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
   };
   if ('wakeLock' in navigator && !window._lsWake) navigator.wakeLock.request('screen').then(w => { window._lsWake = w; w.addEventListener('release', () => (window._lsWake = null)); }).catch(() => {});
+
   const draw = () => {
     const sets = S.rs[S.ri] || [], wa = sets.filter(s => s[0] > s[1]).length, wb = sets.filter(s => s[1] > s[0]).length;
     const h = E.handicapInfo(t, m.a, m.b, S.ri, m.lineup || null), done = allDone();
@@ -2765,13 +2881,26 @@ function viewLive(t) {
   }));
   const smode = document.getElementById('scoreMode');
   if (smode) smode.onclick = e => { e.preventDefault(); ls.set('carrom:scoremode:' + t.id, '1'); toast('Butang 📝 Isi keputusan dipaparkan. PIN acara diperlukan.', 3500); viewLive(t); };
-  document.getElementById('meSel').onchange = e => { ls.set(meKey(t), e.target.value || null); ls.set('carrom:meSet:' + t.id, '1'); pushSync(); viewLive(t); };
+  document.getElementById('meSel').onchange = async e => {
+    ls.set(meKey(t), e.target.value || null); ls.set('carrom:meSet:' + t.id, '1');
+    if (e.target.value && 'Notification' in window && Notification.permission === 'default' && ls.get('carrom:notif') !== '0') await askNotif();
+    pushSync(); viewLive(t);
+  };
   const setTb = () => { t.numTables = Number(document.getElementById('ntSel').value) || 0; E.planSchedule(t); save(t); toast(`${E.numTablesOf(t)} papan digunakan`); render(true); };
   ['ntSel', 'vnSel'].forEach(id => { const el = document.getElementById(id); if (el) el.onchange = setTb; });
   const ag = document.getElementById('agih');
   if (ag) ag.onclick = () => {
     const n = LV.allocate(t);
-    if (!n) return toast('Tiada papan kosong atau tiada perlawanan sedia untuk diagih.');
+    if (!n) {
+      const w = LV.whyIdle(t);
+      if (w.cooled && w.cooled.length && confirm(`Papan tidak dapat diagih:\n\n${w.msg}\n\nAgih juga perlawanan yang ditangguh sekarang?`)) {
+        LV.uncool(t); const n2 = LV.allocate(t);
+        if (n2) { save(t); toast(`${n2} perlawanan diagih ke papan.`); return render(true); }
+        return alert('Masih tidak dapat diagih:\n\n' + LV.whyIdle(t).msg);
+      }
+      if (!(w.cooled && w.cooled.length)) alert('Papan tidak dapat diagih:\n\n' + w.msg);
+      return;
+    }
     save(t); toast(`${n} perlawanan diagih ke papan.`); render(true);
   };
   $app.querySelectorAll('[data-tgh]').forEach(b => (b.onclick = () => {
@@ -2989,7 +3118,8 @@ function unitAwards(t, played) {
 function podiumHtml(t) {
   if (E.isMixer(t) || !t.matches.length || !t.matches.every(m => m.status === 'done' || m.status === 'bye')) return '';
   const R = E.finalRanking(t).filter(x => x.place <= 3), at = p => (R.find(x => x.place === p) || { ids: [] }).ids.map(id => esc(E.pname(t, id))).join(', ');
-  return at(1) ? `<div class="champ">🏆 Johan: ${at(1)}${at(2) ? ` · 🥈 ${at(2)}` : ''}${at(3) ? ` · 🥉 ${at(3)}` : ''}</div>` : '';
+  const n3 = (R.find(x => x.place === 3) || { ids: [] }).ids.length;
+  return at(1) ? `<div class="champ">🏆 Johan: ${at(1)}${at(2) ? ` · 🥈 Naib johan: ${at(2)}` : ''}${at(3) ? ` · 🥉 Tempat ketiga${n3 > 1 ? ' (bersama)' : ''}: ${at(3)}` : ''}</div>` : '';
 }
 function mixReport(t, played, resTable) {
   const S = E.mixStandings(t), nm = id => esc(E.pname(t, id)), sgn = x => (x > 0 ? '+' : '') + x;
@@ -3255,7 +3385,8 @@ function viewReport(t) {
   const resTable = ms => ms.length ? `<div class="tw"><table class="rp"><thead><tr><th>No.</th><th class="l">${UNIT(t)}</th><th>Keputusan</th><th class="l">${UNIT(t)}</th></tr></thead><tbody>${ms.map(resRow).join('')}</tbody></table></div>` : '<p class="muted small">Belum ada keputusan.</p>';
   const ko = b => { const R = t.rounds[b]; if (!R) return ''; let h = '';
     for (let r = 1; r <= R; r++) { const ms = played.filter(m => m.bracket === b && m.round === r).sort((x, y) => x.slot - y.slot); if (ms.length) h += `<h4>${esc(E.roundName(t, b, r))}</h4>${resTable(ms)}`; }
-    return h ? `<h3>${b === 'ko' ? 'Kalah Mati' : 'Pool Kalah'}</h3>${h}` : ''; };
+    return h ? `<h3>${b === 'ko' ? 'Keputusan Kalah Mati' : 'Keputusan Pool Kalah'}</h3>${h}` : ''; };
+  const chart = b => t.rounds[b] && played.some(m => m.bracket === b) ? `<div class="rp-bk"><h3>${b === 'ko' ? 'Carta Kalah Mati' : 'Carta Pool Kalah'}</h3>${bracketHtml(t, b, true)}</div>` : '';
   const final = t.matches.find(m => m.bracket === 'ko' && m.round === t.rounds.ko);
   const body = reportBody(t, played, resTable);
   $app.innerHTML = `${section('Laporan', 'Laporan Pertandingan')}
@@ -3361,11 +3492,16 @@ function showAccount() {
   md.innerHTML = `<div class="sheet">
     <div class="row" style="justify-content:space-between"><h2 style="margin:0">Akaun</h2><button class="pill-btn light small" id="mx">✕</button></div>
     ${cloud.state.failed ? '<p class="notice bad small">Tidak dapat menyambung ke awan. Semak internet dan cuba lagi.</p>' : ''}
-    ${'Notification' in window ? `<div class="row" style="justify-content:space-between;margin:6px 0 10px"><span class="small">🔔 Notifikasi telefon: <b>${notifOn() ? 'Hidup' : 'Mati'}</b></span><button type="button" class="pill-btn light small" id="ntf">${notifOn() ? 'Matikan' : 'Hidupkan'}</button></div>` : ''}
+    ${'Notification' in window ? `<div class="row" style="justify-content:space-between;margin:6px 0 10px"><span class="small">🔔 Notifikasi telefon: <b>${notifOn() ? 'Hidup' : 'Mati'}</b></span><button type="button" class="pill-btn light small" id="ntf">${notifOn() ? 'Matikan' : 'Hidupkan'}</button></div>
+    ${notifOn() ? `<div class="row" style="gap:6px;margin:-4px 0 10px;flex-wrap:wrap"><button type="button" class="pill-btn light small" id="ntfTest">🧪 Uji notifikasi push</button><span class="small muted" id="ntfRes"></span></div>` : ''}` : ''}
     ${signed && cloud.state.user && cloud.state.user.pass && !cloud.state.user.verified ? `<div class="notice small">✉️ <b>Sahkan e-mel anda.</b> Kami telah menghantar pautan pengesahan ke <b>${esc(u.email)}</b> (semak juga folder Spam). Klik pautan itu, kemudian tekan butang di bawah.
       <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap"><button class="pill-btn brand small" id="eChk">✅ Saya sudah sahkan</button><button class="pill-btn light small" id="eRe">Hantar semula</button></div></div>` : ''}
-    ${signed ? `<p>Log masuk sebagai <b>${esc(u.email)}</b><br><span class="role-chip">${ROLE[cloud.state.role] || 'Penonton'}</span></p>
-      ${!cloud.state.role ? '<p class="muted small">Akaun ini belum diberi peranan. Minta admin utama menambah e-mel anda di halaman Pentadbir.</p>' : ''}
+    ${profileCard(true)}
+    ${signed ? `<p>Log masuk sebagai <b>${esc(u.email)}</b><br><span class="role-chip">${ROLE[cloud.state.role] || (profile().name ? 'Peserta' : 'Penonton')}</span></p>
+      ${!cloud.state.role ? (profile().name ? '' : '<p class="muted small">Akaun peserta. Penganjur: minta admin utama menambah e-mel anda di halaman Pentadbir.</p>') : ''}
+ ${!cloud.state.role && u.email && (u.verified || !u.pass) ? '<div id="admReq" class="adm-req"></div>' : ''}
+      ${canPreview() ? `<div class="row" style="justify-content:space-between;margin:6px 0 10px;gap:8px"><span class="small">👁️ <b>Paparan peserta</b><br><span class="muted">Lihat app seperti peserta/penonton</span></span><button type="button" class="pill-btn small ${asPeserta() ? 'brand' : 'light'}" id="asP">${asPeserta() ? 'Keluar paparan' : 'Hidupkan'}</button></div>` : ''}
+      ${cloud.state.role === 'owner' ? `<div class="row" style="justify-content:space-between;margin:-2px 0 10px;gap:8px"><span class="small">👁️ <b>Paparan admin</b><br><span class="muted">${asAdmin() ? `Sedang melihat sebagai <b>${esc(asAdmin().name || asAdmin().email)}</b>` : 'Lihat app seperti admin pertandingan tertentu'}</span></span>${asAdmin() ? '<button type="button" class="pill-btn small brand" id="asAx">Keluar paparan</button>' : '<select id="asA" style="max-width:150px"><option value="">Pilih admin…</option></select>'}</div>` : ''}
       <div class="btn-stack">${cloud.state.role === 'owner' ? '<a class="pill-btn brand" href="#/pentadbir" id="goAdm"><span class="dot"></span>Pentadbir &amp; peranan</a>' : ''}
       <button class="pill-btn light" id="out">Log keluar</button></div>`
     : `<p class="muted">Penonton dan pemain tidak perlu log masuk. Pengadil menghantar skor dengan PIN acara pada kad perlawanan.</p>
@@ -3383,6 +3519,25 @@ function showAccount() {
   md.onclick = e => { if (e.target === md || e.target.id === 'mx' || e.target.id === 'goAdm') md.hidden = true; };
   const ntf = document.getElementById('ntf');
   if (ntf) ntf.onclick = async () => { await askNotif(); showAccount(); };
+  wireProfileCard(md);
+  if (document.getElementById('admReq')) admReqCard(document.getElementById('admReq'));
+  const asA = document.getElementById('asA');
+  if (asA) { const un = cloud.watchRoles(list => { try { un && un(); } catch {} const ad = list.filter(r => r.role === 'admin'); asA.innerHTML = `<option value="">${ad.length ? 'Pilih admin…' : 'Tiada admin'}</option>` + ad.map(r => `<option value="${esc(r.email)}">${esc(r.name || r.email)}</option>`).join(''); asA.onchange = () => { const r = ad.find(x => x.email === asA.value); if (r) { setAsAdmin({ email: r.email, name: r.name || '', clubs: Array.isArray(r.clubs) ? r.clubs : null }); md.hidden = true; } }; }); }
+  const asAx = document.getElementById('asAx'); if (asAx) asAx.onclick = () => { setAsAdmin(null); md.hidden = true; };
+  const asP = document.getElementById('asP');
+  if (asP) asP.onclick = () => { setAsPeserta(!asPeserta()); md.hidden = true; };
+  const nt = document.getElementById('ntfTest');
+  if (nt) nt.onclick = async () => {
+    const out = document.getElementById('ntfRes'), say = x => (out.innerHTML = x);
+    nt.disabled = true; say('Menyemak…');
+    try {
+      if (!PUSH.pushAvailable()) return say('❌ Pelayar ini tidak menyokong push. iPhone: pasang app ke skrin utama (Kongsi → Add to Home Screen) dan buka dari ikon.');
+      const sub = await PUSH.subscribe(); if (!sub) return say('❌ Langganan push gagal dibuat.');
+      _pushForced = false; pushSync(); await new Promise(r => setTimeout(r, 2500));
+      const r = await PUSH.sendNow(['me:dev:' + devId()], '🧪 Ujian notifikasi', 'Jika anda nampak ini, notifikasi push berfungsi.', '#/', 'test-push');
+      say(r.ok ? (r.sent ? `✅ Dihantar (${r.sent}). Tutup app sebentar dan semak notifikasi.` : '⚠️ Pelayan tidak menemui langganan telefon ini. Cuba matikan dan hidupkan semula notifikasi.') : `❌ Pelayan push: ${esc(r.error || 'tiada respons')}`);
+    } catch (e) { say('❌ ' + esc(e.message || e)); } finally { nt.disabled = false; }
+  };
   const gin = document.getElementById('gin');
   if (gin) gin.onclick = async () => {
     gin.disabled = true;
@@ -3477,6 +3632,63 @@ function wireCoAdmin(t) {
   }));
 }
 let _rolesUnsub = null;
+// ---------- Permohonan menjadi penganjur ----------
+async function admReqCard(el) {
+  const r = await cloud.myAdminReq();
+  if (r) {
+    el.innerHTML = `<div class="notice small">⏳ <b>Permohonan penganjur dihantar</b><br>Kelab: ${(r.clubs || []).map(k => esc(clubLabel(k))).join(', ')}. Menunggu pengesahan admin utama.
+      <div class="row" style="margin-top:6px"><button type="button" class="pill-btn light small" id="arCancel">Batal permohonan</button></div></div>`;
+    document.getElementById('arCancel').onclick = async () => { await cloud.cancelAdminReq(); toast('Permohonan dibatalkan'); admReqCard(el); };
+    return;
+  }
+  el.innerHTML = `<details class="fold" style="margin:6px 0 10px"><summary>🛡️ Mohon jadi penganjur</summary>
+    <p class="muted small" style="margin:6px 0">Pilih kelab yang anda wakili. Admin utama akan mengesahkan sebelum anda boleh mencipta pertandingan.</p>
+    <div class="ar-clubs">${Object.entries(CLUB_OPTS).map(([k, v]) => `<label class="ar-ck"><input type="checkbox" value="${k}"> ${esc(v)}</label>`).join('')}</div>
+    <label>Catatan <small class="muted">(pilihan)</small></label><input id="arNote" maxlength="200" placeholder="cth. AJK sukan KSKPKPJB">
+    <div class="row" style="margin-top:8px"><button type="button" class="pill-btn brand small" id="arSend">Hantar permohonan</button></div></details>`;
+  document.getElementById('arSend').onclick = async () => {
+    const clubs = [...el.querySelectorAll('.ar-ck input:checked')].map(x => x.value);
+    if (!clubs.length) return toast('Pilih sekurang-kurangnya satu kelab');
+    const name = (cloud.state.user && cloud.state.user.name) || profile().name || '';
+    try {
+      await cloud.requestAdmin({ clubs, note: document.getElementById('arNote').value.trim(), name });
+      PUSH.send(['adm:owner'], '🛡️ Permohonan penganjur', `${name || cloud.state.user.email} · ${clubs.map(clubLabel).join(', ')}`, '#/pentadbir', 'admreq');
+      toast('Permohonan dihantar'); admReqCard(el);
+    } catch (e) { toast('Gagal: ' + (e.code || e.message), 4000); }
+  };
+}
+const clubTicks = (sel, name) => `<div class="ar-clubs">${Object.entries(CLUB_OPTS).map(([k, v]) => `<label class="ar-ck"><input type="checkbox" name="${name}" value="${k}" ${sel.includes(k) ? 'checked' : ''}> ${esc(v)}</label>`).join('')}</div>`;
+let _reqUnsub = null, _roleList = [];
+function wireClubDefs() {
+  const $ = id => document.getElementById(id); let logo = '';
+  const showLogo = () => { $('cdLogoV').innerHTML = logo ? `<img src="${logo}" alt="">` : '<span class="muted small">tiada</span>'; $('cdLogoX').hidden = !logo; };
+  const fill = d => { $('cdId').value = d ? d.id : ''; $('cdShort').value = d ? d.short : ''; $('cdName').value = d ? d.name || '' : ''; $('cdColor').value = d ? d.color || '#1f4aa8' : '#1f4aa8'; $('cdAcc').value = d ? d.accent || '#ff7a1a' : '#ff7a1a'; logo = d ? d.logo || '' : ''; showLogo(); $('cdForm').querySelector('summary').textContent = d ? `✏️ Ubah ${d.short}` : '➕ Tambah kelab'; };
+  const list = () => {
+    const ts = store.list();
+    $('cdList').innerHTML = _clubDefs.length ? _clubDefs.map(d => `<div class="list-item"><span class="row" style="flex-wrap:nowrap;gap:10px"><span class="cd-logo" style="border-color:${esc(d.color || '#1f4aa8')}">${d.logo ? `<img src="${d.logo}" alt="">` : ''}</span><span><b>${esc(d.short)}</b><br><span class="muted small">${esc(d.name || '')} · ${ts.filter(t => t.clubId === d.id).length} pertandingan</span></span></span>
+      <span class="row"><button class="pill-btn light small" data-cde="${esc(d.id)}">✏️</button><button class="pill-btn no small" data-cdd="${esc(d.id)}">🗑</button></span></div>`).join('') : '<p class="muted small">Belum ada kelab tambahan.</p>';
+    $('cdList').querySelectorAll('[data-cde]').forEach(b => (b.onclick = () => { fill(_clubDefs.find(d => d.id === b.dataset.cde)); $('cdForm').open = true; $('cdForm').scrollIntoView({ behavior: 'smooth' }); }));
+    $('cdList').querySelectorAll('[data-cdd]').forEach(b => (b.onclick = async () => {
+      const d = _clubDefs.find(x => x.id === b.dataset.cdd), n = ts.filter(t => t.clubId === d.id).length;
+      if (!confirm(`Padam kelab ${d.short}?${n ? `\n\n${n} pertandingan masih menggunakan kelab ini; ia akan dipaparkan tanpa logo/tema.` : ''}`)) return;
+      try { await cloud.deleteClubDef(d.id); toast('Kelab dipadam'); } catch (e) { toast('Gagal: ' + (e.code || e.message), 4000); }
+    }));
+  };
+  list(); showLogo();
+  $('cdLogo').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { logo = await resizeLogo(f); showLogo(); } catch { toast('Gambar tidak dapat dibaca'); } e.target.value = ''; };
+  $('cdLogoX').onclick = () => { logo = ''; showLogo(); };
+  $('cdNew').onclick = () => fill(null);
+  $('cdSave').onclick = async () => {
+    const short = $('cdShort').value.trim(); if (!short) return toast('Isi nama pendek');
+    let id = $('cdId').value;
+    if (!id) { const base = short.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '').slice(0, 16) || 'kelab'; id = base; let i = 2; while (CLUBS[id] || BUILTIN_CLUBS.has(id) || ['lain', 'semua'].includes(id)) id = base + i++; }
+    const d = { short, name: $('cdName').value.trim() || short, color: $('cdColor').value, accent: $('cdAcc').value, logo };
+    if (logo.length > 280000) return toast('Logo terlalu besar');
+    try { await cloud.saveClubDef(id, d); toast(`Kelab ${short} disimpan`); fill(null); $('cdForm').open = false; } catch (e) { toast('Gagal: ' + (e.code || e.message), 4000); }
+  };
+  _cdRefresh = list;
+}
+let _cdRefresh = null;
 function viewAdmin() {
   if (cloud.state.role !== 'owner') { $app.innerHTML = `${section('Pentadbir', 'Peranan')}<div class="card"><p class="muted">Hanya admin utama (${esc(cloud.ownerEmail())}) boleh membuka halaman ini.</p></div>`; return; }
   $app.innerHTML = `${section('Pentadbir', 'Peranan')}
@@ -3484,20 +3696,63 @@ function viewAdmin() {
       <div class="grid2"><div><label>E-mel <small class="muted">(Google, Yahoo, Outlook…)</small></label><input id="rEmail" type="email" placeholder="nama@gmail.com / nama@yahoo.com"></div>
       <div><label>Nama</label><input id="rName" placeholder="cth. Hatta"></div>
       <div><label>Peranan</label><select id="rRole">${opt({ verifier: 'Pengesah skor', admin: 'Admin pertandingan' }, 'verifier')}</select></div></div>
+      <div id="rClubs" hidden><label>Kelab admin ini</label>${clubTicks([], 'rnew')}</div>
       <button class="pill-btn brand" id="rAdd" style="margin-top:12px"><span class="dot"></span>Tambah / kemas kini</button></div>
+    <div class="card"><div class="section-title" style="margin-top:0">🏷️ Urus kelab</div>
+      <p class="muted small" style="margin-top:0">Kelab terbina: KSAS, KSKPKPJB, Persendirian. Senarai kelab tambahan dikongsi dengan Portal Pingpong. Tambah kelab/penganjur lain di sini — terus muncul dalam pilihan kelab, cip penapis, poster &amp; laporan.</p>
+      <div id="cdList"></div>
+      <details class="fold" id="cdForm"><summary>➕ Tambah kelab</summary>
+        <input type="hidden" id="cdId">
+        <div class="grid2"><div><label>Nama pendek</label><input id="cdShort" maxlength="30" placeholder="cth. KSHSI"></div>
+        <div><label>Nama penuh</label><input id="cdName" maxlength="100" placeholder="cth. Kelab Sukan Hospital Sultan Ismail"></div></div>
+        <div class="grid2"><div><label>Warna utama</label><input id="cdColor" type="color" value="#1f4aa8" style="height:42px"></div>
+        <div><label>Warna aksen</label><input id="cdAcc" type="color" value="#ff7a1a" style="height:42px"></div></div>
+        <label>Logo <small class="muted">(PNG/JPG, latar lutsinar lebih baik)</small></label>
+        <div class="row" style="gap:10px"><span class="cd-logo" id="cdLogoV"></span><label class="pill-btn light small" style="margin:0">Pilih logo<input type="file" id="cdLogo" accept="image/*" hidden></label><button type="button" class="pill-btn light small" id="cdLogoX" hidden>Buang logo</button></div>
+        <div class="row" style="gap:6px;margin-top:10px"><button type="button" class="pill-btn brand small" id="cdSave">Simpan kelab</button><button type="button" class="pill-btn light small" id="cdNew">Kosongkan</button></div>
+      </details></div>
+    <div class="card" id="reqCard" hidden><div class="section-title" style="margin-top:0">⏳ Permohonan penganjur</div><div id="reqList"></div></div>
     <div class="card"><div class="section-title" style="margin-top:0">Senarai</div><div id="rList" class="muted">Memuatkan…</div></div>`;
+  wireClubDefs();
+  if (_reqUnsub) _reqUnsub();
+  _reqUnsub = cloud.watchAdminReqs(list => {
+    const card = document.getElementById('reqCard'), el = document.getElementById('reqList'); if (!el) return;
+    card.hidden = !list.length;
+    el.innerHTML = list.map((r, i) => `<div class="req-item"><b>${esc(r.name || r.email)}</b> <span class="muted small">${esc(r.email)}</span>
+      ${r.note ? `<div class="small"><i>${esc(r.note)}</i></div>` : ''}
+      <div class="small muted" style="margin-top:4px">Kelab (boleh diubah sebelum lulus):</div>${clubTicks(r.clubs || [], 'rq' + i)}
+      <div class="row" style="gap:6px;margin-top:6px"><button type="button" class="pill-btn brand small" data-rok="${i}">✅ Luluskan sebagai admin</button><button type="button" class="pill-btn no small" data-rno="${i}">✕ Tolak</button></div></div>`).join('');
+    el.querySelectorAll('[data-rok]').forEach(b => (b.onclick = async () => {
+      const r = list[+b.dataset.rok], clubs = [...el.querySelectorAll(`input[name="rq${b.dataset.rok}"]:checked`)].map(x => x.value);
+      if (!clubs.length) return toast('Pilih sekurang-kurangnya satu kelab');
+      try { await cloud.setRole(r.email, 'admin', r.name || '', clubs); await cloud.cancelAdminReq(r.email); toast(`${r.name || r.email} diluluskan`); } catch (e) { toast('Gagal: ' + (e.code || e.message), 4000); }
+    }));
+    el.querySelectorAll('[data-rno]').forEach(b => (b.onclick = async () => { const r = list[+b.dataset.rno]; if (confirm(`Tolak permohonan ${r.name || r.email}?`)) { await cloud.cancelAdminReq(r.email); toast('Ditolak'); } }));
+  });
   if (_rolesUnsub) _rolesUnsub();
-  _rolesUnsub = cloud.watchRoles(list => {
+  _rolesUnsub = cloud.watchRoles(list => { _roleList = list;
     const el = document.getElementById('rList'); if (!el) return;
     el.innerHTML = `<div class="list-item"><span><b>${esc(cloud.ownerEmail())}</b><br><span class="muted small">Pemilik</span></span><span class="role-chip">Admin utama</span></div>` +
-      list.map(r => `<div class="list-item"><span><b>${esc(r.name || r.email)}</b><br><span class="muted small">${esc(r.email)}</span></span>
-      <span class="row"><span class="role-chip">${ROLE[r.role] || r.role}</span><button class="pill-btn no small" data-rm="${esc(r.email)}">Buang</button></span></div>`).join('');
+      list.map((r, i) => `<div class="list-item" style="flex-wrap:wrap"><span><b>${esc(r.name || r.email)}</b><br><span class="muted small">${esc(r.email)}</span>
+        ${r.role === 'admin' ? `<br><span class="small">${Array.isArray(r.clubs) && r.clubs.length ? '🏷️ ' + carromClubs(r.clubs).map(k => esc(clubLabel(k))).join(', ') : '<span class="tg warn">⚠️ kelab belum ditetapkan</span>'}</span>` : ''}</span>
+      <span class="row"><span class="role-chip">${ROLE[r.role] || r.role}</span>${r.role === 'admin' ? `<button class="pill-btn light small" data-rc="${i}">🏷️ Kelab</button>` : ''}<button class="pill-btn no small" data-rm="${esc(r.email)}">Buang</button></span>
+      ${r.role === 'admin' ? `<div class="rc-edit" id="rc${i}" hidden style="width:100%">${clubTicks(carromClubs(r.clubs), 'rc' + i)}<button class="pill-btn brand small" data-rcs="${i}" style="margin-top:6px">Simpan kelab</button></div>` : ''}</div>`).join('');
+    el.querySelectorAll('[data-rc]').forEach(b => (b.onclick = () => { const d = document.getElementById('rc' + b.dataset.rc); d.hidden = !d.hidden; }));
+    el.querySelectorAll('[data-rcs]').forEach(b => (b.onclick = async () => {
+      const r = list[+b.dataset.rcs], clubs = [...el.querySelectorAll(`input[name="rc${b.dataset.rcs}"]:checked`)].map(x => x.value);
+      if (!clubs.length) return toast('Pilih sekurang-kurangnya satu kelab');
+      try { await cloud.setRoleClubs(r.email, mergeClubs(r.clubs, clubs)); toast('Kelab dikemas kini'); } catch (e) { toast('Gagal: ' + (e.code || e.message), 4000); }
+    }));
     el.querySelectorAll('[data-rm]').forEach(b => (b.onclick = async () => { if (confirm(`Buang ${b.dataset.rm}?`)) await cloud.removeRole(b.dataset.rm); }));
   });
+  const rr = document.getElementById('rRole'); rr.onchange = () => (document.getElementById('rClubs').hidden = rr.value !== 'admin');
   document.getElementById('rAdd').onclick = async () => {
     const em = document.getElementById('rEmail').value.trim().toLowerCase();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return toast('E-mel tidak sah');
-    try { await cloud.setRole(em, document.getElementById('rRole').value, document.getElementById('rName').value.trim()); toast('Disimpan'); document.getElementById('rEmail').value = ''; document.getElementById('rName').value = ''; }
+    const rl = document.getElementById('rRole').value, cl = [...document.querySelectorAll('input[name="rnew"]:checked')].map(x => x.value);
+    if (rl === 'admin' && !cl.length) return toast('Pilih kelab untuk admin ini');
+    const ex = (_roleList || []).find(x => x.email === em.toLowerCase());
+    try { await cloud.setRole(em, rl, document.getElementById('rName').value.trim(), rl === 'admin' ? mergeClubs(ex && ex.clubs, cl) : undefined); toast('Disimpan'); document.getElementById('rEmail').value = ''; document.getElementById('rName').value = ''; }
     catch (err) { toast('Gagal: ' + (err.code || err.message), 4000); }
   };
 }

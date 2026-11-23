@@ -54,7 +54,10 @@ export const isVerifier = () => isAdmin() || state.role === 'verifier';
 let unsubT = null, unsubRole = null;
 const unsubSub = {};
 
-export async function init() {
+// Satu permulaan sahaja walaupun dipanggil serentak (cth. senarai kelab + log masuk) — elak Firebase diinisialisasi dua kali
+let _initP = null;
+export function init() { return _initP || (_initP = init0()); }
+async function init0() {
   if (F || state.failed) return;
   try {
     F = await import('./vendor/firebase.js');
@@ -95,6 +98,7 @@ async function watchRole() {
   if (await sha256(u.email.toLowerCase()) === OWNER_HASH) { state.role = 'owner'; watchOwners(); emit('role'); return; }
   unsubRole = F.onSnapshot(F.doc(db, 'roles', u.email.toLowerCase()), d => {
     state.role = d.exists() ? (d.data().role || '') : '';
+    state.clubs = d.exists() && Array.isArray(d.data().clubs) ? d.data().clubs : null;   // kelab yang disahkan pemilik untuk admin
     watchOwners();
     emit('role');
   }, () => { state.role = ''; emit('role'); });
@@ -110,6 +114,34 @@ export async function signInGoogle() {
     if (['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/cancelled-popup-request'].includes(e.code)) return F.signInWithRedirect(auth, p);
     throw e;
   }
+}
+// Peserta: simpan profil dengan Google. Akaun tanpa nama dipautkan (uid kekal → pendaftaran lama tetap milik peserta);
+// jika akaun Google itu sudah wujud (telefon lain), log masuk terus ke akaun tersebut.
+export async function linkGoogle() {
+  await init();
+  const p = new F.GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
+  const u = auth.currentUser;
+  if (!u || !u.isAnonymous) return signInGoogle();
+  try { await F.linkWithPopup(u, p); }
+  catch (e) {
+    if (e.code === 'auth/credential-already-in-use' || e.code === 'auth/email-already-in-use') {
+      const cr = F.GoogleAuthProvider.credentialFromError(e);
+      if (cr) await F.signInWithCredential(auth, cr); else await F.signInWithPopup(auth, p);
+    } else if (['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/cancelled-popup-request'].includes(e.code)) return F.linkWithRedirect(u, p);
+    else throw e;
+  }
+  const v = auth.currentUser;   // pautan tidak mencetuskan onAuthStateChanged: kemas kini keadaan sendiri
+  state.user = { uid: v.uid, email: v.email || (v.providerData[0] || {}).email || '', name: v.displayName || (v.providerData[0] || {}).displayName || '', anon: v.isAnonymous, verified: !!v.emailVerified, pass: false };
+  watchRole(); emit('auth');
+}
+export async function saveProfileCloud(p) {
+  await init(); const u = auth.currentUser; if (!u || u.isAnonymous) return false;
+  const d = { name: String(p.name || '').slice(0, 50), full: String(p.full || '').slice(0, 80), unit: String(p.unit || '').slice(0, 40), level: String(p.level || '').slice(0, 10), partner: String(p.partner || '').slice(0, 40), at: F.serverTimestamp() };
+  await F.setDoc(F.doc(db, 'profiles', u.uid), d); return true;
+}
+export async function loadProfileCloud() {
+  await init(); const u = auth.currentUser; if (!u || u.isAnonymous) return null;
+  const s = await F.getDoc(F.doc(db, 'profiles', u.uid)); return s.exists() ? s.data() : null;
 }
 // Log masuk dengan e-mel lain (Yahoo, Outlook, e-mel pejabat…): kata laluan + pautan pengesahan e-mel
 export async function signInEmail(email, pass) { await init(); const c = await F.signInWithEmailAndPassword(auth, email.trim(), pass); return c.user; }
@@ -159,7 +191,30 @@ export async function setPin(tid, pin) { await init(); await F.setDoc(F.doc(db, 
 export function watchRoles(cb) {
   return F.onSnapshot(F.collection(db, 'roles'), snap => { const out = []; snap.forEach(d => out.push({ email: d.id, ...d.data() })); cb(out); }, () => cb([]));
 }
-export async function setRole(email, role, name = '') { await init(); await F.setDoc(F.doc(db, 'roles', email.trim().toLowerCase()), { role, name }); }
+export async function setRole(email, role, name = '', clubs) {
+  await init(); await F.setDoc(F.doc(db, 'roles', email.trim().toLowerCase()), { role, name, ...(Array.isArray(clubs) ? { clubs } : {}) });
+}
+export async function setRoleClubs(email, clubs) { await init(); await F.setDoc(F.doc(db, 'roles', email.trim().toLowerCase()), { clubs }, { merge: true }); }
+// Kelab tambahan yang dicipta pemilik (Pentadbir → Urus kelab): semua boleh baca, pemilik sahaja tulis
+export function watchClubDefs(cb) {
+  init().then(() => F.onSnapshot(F.collection(db, 'clubDefs'), snap => { const out = []; snap.forEach(d => out.push({ id: d.id, ...d.data() })); cb(out); }, () => {})).catch(() => {});
+}
+export async function saveClubDef(id, d) { await init(); await F.setDoc(F.doc(db, 'clubDefs', id), { ...d, at: F.serverTimestamp() }); }
+export async function deleteClubDef(id) { await init(); await F.deleteDoc(F.doc(db, 'clubDefs', id)); }
+// Permohonan menjadi penganjur (admin): pemohon pilih kelab; pemilik luluskan/tolak di halaman Pentadbir
+export async function requestAdmin({ clubs, note, name }) {
+  await init(); const u = auth.currentUser; if (!u || u.isAnonymous || !u.email) throw new Error('Log masuk dahulu');
+  const email = u.email.toLowerCase();
+  await F.setDoc(F.doc(db, 'adminReq', email), { email, uid: u.uid, name: String(name || u.displayName || '').slice(0, 50), clubs: clubs.slice(0, 6), note: String(note || '').slice(0, 200), at: F.serverTimestamp() });
+}
+export async function myAdminReq() {
+  await init(); const u = auth.currentUser; if (!u || u.isAnonymous || !u.email) return null;
+  try { const d = await F.getDoc(F.doc(db, 'adminReq', u.email.toLowerCase())); return d.exists() ? d.data() : null; } catch { return null; }
+}
+export async function cancelAdminReq(email) { await init(); const u = auth.currentUser; await F.deleteDoc(F.doc(db, 'adminReq', (email || (u && u.email) || '').toLowerCase())); }
+export function watchAdminReqs(cb) {
+  return F.onSnapshot(F.collection(db, 'adminReq'), snap => { const out = []; snap.forEach(d => out.push({ email: d.id, ...d.data() })); cb(out); }, () => cb([]));
+}
 export async function removeRole(email) { await init(); await F.deleteDoc(F.doc(db, 'roles', email.trim().toLowerCase())); }
 
 // ---------- Penghantaran skor ----------
@@ -311,7 +366,7 @@ const _lockAt = {}, _sumAt = {}, _sumT = {};
 let _scoring = 0;
 export async function setLive(tid, mid, { rs, cur, ri, by, tb, sw }) {
   const u = await ensureAnon();
-  const e = { uid: u.uid, rs: encodeRubbers(rs), cur: `${cur[0]}-${cur[1]}`, ri: ri | 0, by: String(by || '').slice(0, 50), tb: String(tb || '').slice(0, 15), sw: !!sw };
+  const e = { uid: u.uid, rs: encodeRubbers(rs), cur: `${cur[0]}-${cur[1]}${cur[2] === 0 || cur[2] === 1 ? '-' + cur[2] : ''}`, ri: ri | 0, by: String(by || '').slice(0, 50), tb: String(tb || '').slice(0, 15), sw: !!sw };
   const k = tid + '/' + mid;
   if (!_lockAt[k] || Date.now() - _lockAt[k] > 60e3) {
     await F.setDoc(F.doc(db, 'tournaments', tid, 'live', mid), { ...e, at: F.serverTimestamp() });
