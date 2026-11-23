@@ -944,3 +944,15 @@ body.tv .as-bar { display:none; }
 @media (orientation: portrait) { .tv-cb-grid { grid-template-columns: repeat(min(var(--tvc), 2), minmax(0, 1fr)); grid-template-rows:none; grid-auto-rows: minmax(30vh, 1fr); overflow:auto; } }
 .lv-vals { display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; }
 .lv-vals label { margin:0; font-size:12.5px; font-weight:700; } .lv-vals input { margin-top:4px; text-align:center; }
+/* laporan: foto papan carrom sebagai latar kepala (bukan gambar besar berasingan) */
+.rpx-head.has-bg { min-height:118px; background:
+  linear-gradient(90deg, var(--tb2) 0%, var(--tb2) 38%, color-mix(in srgb, var(--tb2) 55%, transparent) 62%, transparent 85%),
+  var(--hbg) right center / cover no-repeat, var(--tb2); }
+@media print { .rpx-head.has-bg { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+.rpx-res .rpx-blk table td, .rpx-res .rpx-blk table th { font-size:10.5px; }
+/* laporan: nama regu satu baris dalam ranking (jimat ruang) */
+.rpx .rank .nm2 { display:inline; } .rpx .rank .nm2 span { display:inline; } .rpx .rank .nm2 span + span::before { content:' & '; }
+.rpx .rank td { padding-top:2px; padding-bottom:2px; } .rpx .rank .av { width:18px; height:18px; font-size:7.5px; }
+@media print { .rpx-rules { font-size:10px; } .rpx-rules li { margin-bottom:2px; } }
+@media print { .rpx .rp-sign { margin-top:14px; font-size:11px; } .rpx .rp-sign .ln { height:34px; } .rpx .rp-foot { margin:6px 0 0; } }
+@media print { .rpx-sec.rk-keep { break-inside: avoid; } .rpx .rp-sign { break-inside: avoid; } }

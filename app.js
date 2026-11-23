@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.11.0';
+const VERSION = 'C1.11.1';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -3342,17 +3342,16 @@ function reportBody(t, played, resTable) {
   const G = t.groups, isRR = t.format === 'rr';
   const resultsBy = ms => ms.length ? resTable(ms) : '';
   return `<div class="rpx">
-    <img class="rpx-banner" src="${esc(bannerImg(t, true))}" alt="">
-    <div class="rpx-head">${c.logos.map(x => `<img src="${esc(x)}" alt="">`).join('')}<div><div class="rpx-k">LAPORAN PERTANDINGAN CARROM</div><h2>${esc(t.name)}</h2><div class="rpx-club">${esc(c.name)}</div></div></div>
+    <div class="rpx-head has-bg" style="--hbg:url('${esc(bannerImg(t, true))}')">${c.logos.map(x => `<img src="${esc(x)}" alt="">`).join('')}<div><div class="rpx-k">LAPORAN PERTANDINGAN CARROM</div><h2>${esc(t.name)}</h2><div class="rpx-club">${esc(c.name)}</div></div></div>
     <div class="rpx-info">${info.map(([k, v]) => `<div><span>${k}</span><b>${esc(v)}</b></div>`).join('')}</div>
     ${pod.length ? `<div class="rpx-pod">${pod.map(([p, ic, lb]) => `<div class="pd${p}"><div class="ic">${ic}</div><div class="lb">${lb}</div><div class="nm">${at(p).map(nm).join('<br>')}</div></div>`).join('')}</div>` : ''}
     ${E.isMixer(t) ? mixReport(t, played, resTable) : ''}
     ${G.length ? sec(isRR ? 'Kedudukan Liga' : 'Kedudukan Kumpulan', `<div class="rpx-grid">${G.map(g => `<div class="rpx-blk"><h4>${isRR ? 'Liga' : 'Kumpulan ' + esc(g.name)}</h4>${standingsTable(t, g)}</div>`).join('')}</div><p class="rpx-note">Baris berlorek = layak ke kalah mati${t.pool !== '0' && !isRR ? ' / pool kalah' : ''}. Mata: menang 3, kalah 0.</p>`) : ''}
     ${!E.isMixer(t) && G.length && played.some(m => m.stage === 'group') ? sec('Matriks Keputusan', `<div class="rpx-grid">${G.map(g => `<div class="rpx-blk mx-mat"><h4>${isRR ? 'Liga' : 'Kumpulan ' + esc(g.name)}</h4>${matrixHtml(t, g).replace(/<p class="muted small">[^]*?<\/p>$/, '')}</div>`).join('')}</div><p class="rpx-note">Baca mengikut baris: game dimenangi ${UNIT(t).toLowerCase()} di baris itu menentang ${UNIT(t).toLowerCase()} di lajur. Hijau = menang.</p>`) : ''}
     ${chart('ko')}${chart('pool')}
-    ${G.length ? sec(`Keputusan Peringkat ${isRR ? 'Liga' : 'Kumpulan'}`, G.map(g => { const ms = played.filter(m => m.stage === 'group' && m.group === g.name).sort((x, y) => x.gn - y.gn); return ms.length ? `<div class="rpx-blk"><h4>${isRR ? 'Liga' : 'Kumpulan ' + esc(g.name)}</h4>${resultsBy(ms)}</div>` : ''; }).join('')) : ''}
-    ${['ko', 'pool'].map(b => { let h = ''; for (let r = 1; r <= (t.rounds[b] || 0); r++) { const ms = played.filter(m => m.bracket === b && m.round === r).sort((x, y) => x.slot - y.slot); if (ms.length) h += `<div class="rpx-blk"><h4>${esc(E.roundName(t, b, r))}</h4>${resultsBy(ms)}</div>`; } return h ? sec(b === 'ko' ? 'Keputusan Kalah Mati' : 'Keputusan Pool Kalah', h) : ''; }).join('')}
-    ${t.stage === 'done' && t.format !== 'rr' ? sec('Ranking Akhir', rankingHtml(t).replace(/^[^]*?<div class="tw">/, '<div class="tw">').replace(/<div class="foot">[^]*$/, `<p class="rpx-note">* ${RANK_NOTE}</p>`), 'pb') : ''}
+    ${G.length ? sec(`Keputusan Peringkat ${isRR ? 'Liga' : 'Kumpulan'}`, G.map(g => { const ms = played.filter(m => m.stage === 'group' && m.group === g.name).sort((x, y) => x.gn - y.gn); return ms.length ? `<div class="rpx-blk"><h4>${isRR ? 'Liga' : 'Kumpulan ' + esc(g.name)}</h4>${resultsBy(ms)}</div>` : ''; }).join('').replace(/^/, G.length > 1 ? '<div class="rpx-grid rpx-res">' : '<div>') + '</div>') : ''}
+    ${['ko', 'pool'].map(b => { let h = ''; for (let r = 1; r <= (t.rounds[b] || 0); r++) { const ms = played.filter(m => m.bracket === b && m.round === r).sort((x, y) => x.slot - y.slot); if (ms.length) h += `<div class="rpx-blk"><h4>${esc(E.roundName(t, b, r))}</h4>${resultsBy(ms)}</div>`; } return h ? sec(b === 'ko' ? 'Keputusan Kalah Mati' : 'Keputusan Pool Kalah', `<div class="rpx-grid rpx-res">${h}</div>`) : ''; }).join('')}
+    ${t.stage === 'done' && t.format !== 'rr' ? sec('Ranking Akhir', rankingHtml(t).replace(/^[^]*?<div class="tw">/, '<div class="tw">').replace(/<div class="foot">[^]*$/, `<p class="rpx-note">* ${RANK_NOTE}</p>`), 'rk-keep') : ''}
     <section class="rpx-sec"><h3>Peraturan &amp; Penentuan Kedudukan</h3><ol class="rules small rpx-rules">${[...rulesOf(t), ...(t.stage === 'done' && t.format !== 'rr' && !E.isMixer(t) ? [RANK_RULE] : [])].map(r => `<li>${esc(r)}</li>`).join('')}</ol>
       <div class="rp-sign"><div><div class="ln"></div>Disediakan oleh<br><small>Nama: ${esc((t.createdBy && t.createdBy.name) || '')}</small></div><div><div class="ln"></div>Disahkan oleh<br><small>Penganjur / Pengurus pertandingan</small></div></div></section>
     <p class="muted small rp-foot">Dijana oleh Carrom Portal · ${new Date().toLocaleString('ms-MY')}</p></div>`;
