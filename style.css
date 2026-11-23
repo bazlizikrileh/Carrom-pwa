@@ -971,3 +971,15 @@ body.tv .as-bar { display:none; }
 @media screen and (max-width:720px) { .rpx-stats { grid-template-columns: 1fr 1fr; } .rpx-roster { grid-template-columns: 1fr 1fr; } .rpx-foot { flex-wrap:wrap; } }
 @media print { .rpx-stats > div { break-inside: avoid; } }
 .rpx-roster small { font-size:9px !important; font-weight:600; }
+/* 📷 gambar pertandingan */
+.ph-grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; }
+.ph-it { position:relative; border-radius:10px; overflow:hidden; background:#0001; }
+.ph-it img { width:100%; aspect-ratio: 4/3; object-fit:cover; display:block; background:#e9dcc4; }
+.ph-it input { width:100%; border:0; border-top:1px solid var(--line); border-radius:0; font-size:12px; padding:6px 8px; margin:0; }
+.ph-x { position:absolute; top:4px; right:4px; width:26px; height:26px; border-radius:50%; border:0; background:rgba(0,0,0,.6); color:#fff; font-size:13px; line-height:26px; padding:0; }
+.ph-it.miss img, .rpx-ph.miss img { opacity:.25; }
+.rpx-gal { display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; }
+.rpx-ph { margin:0; break-inside: avoid; }
+.rpx-ph img { width:100%; aspect-ratio: 4/3; object-fit:cover; display:block; border-radius:8px; background:#eee; }
+.rpx-ph figcaption { font-size:10.5px; text-align:center; margin-top:3px; color: var(--muted); }
+@media screen and (max-width:720px) { .rpx-gal, .ph-grid { grid-template-columns: 1fr 1fr; } }

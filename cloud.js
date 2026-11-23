@@ -406,3 +406,9 @@ export function watchPoster(tid) {
 }
 export async function setPoster(tid, img) { await init(); await F.setDoc(F.doc(db, 'posters', tid), { img, at: F.serverTimestamp() }); }
 export async function delPoster(tid) { await init(); await F.deleteDoc(F.doc(db, 'posters', tid)); }
+
+// ---------- Gambar pertandingan (laporan & video) ----------
+// carromPhotos/{tid}_{id}: { tid, img (data:image/jpeg;base64, < 900 KB), at }
+export async function savePhoto(tid, id, img) { await init(); await F.setDoc(F.doc(db, 'carromPhotos', `${tid}_${id}`), { tid, img, at: F.serverTimestamp() }); }
+export async function loadPhoto(tid, id) { await init(); const d = await F.getDoc(F.doc(db, 'carromPhotos', `${tid}_${id}`)); return d.exists() ? d.data().img : null; }
+export async function deletePhoto(tid, id) { await init(); await F.deleteDoc(F.doc(db, 'carromPhotos', `${tid}_${id}`)); }

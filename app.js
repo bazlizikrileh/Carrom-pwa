@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.12.0';
+const VERSION = 'C1.13.0';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -3286,6 +3286,7 @@ function wireRecap(t) {
       const [{ buildRecap }, V, S] = await Promise.all([import('./recap-video.js'), import('./draw-video.js'), import('./sound.js')]);
       const RD = recapData(t), tpl = op.value !== '' ? +op.value : Math.floor(Math.random() * 10);
       RD.style = tpl; RD.noAwards = true;   // carrom: tiada detik menarik
+      if ((t.photos || []).length) { try { RD.photos = await (await import('./photos.js')).photoImages(t); } catch {} }
       const R = buildRecap(RD), style = sel.value !== '' ? +sel.value : S.RECAP[Math.floor(Math.random() * S.RECAP.length)][0];
       const made = await V.prepareDrawVideo({ custom: R, logos: recapData(t).logos, music: true, musicStyle: style, title: `Ringkasan ${t.name}`, subtitle: '' }, (p, mode) => {
         go.textContent = mode === 'audio' ? '🎵 Menyediakan muzik…' : mode === 'shrink' ? `🗜️ Mengecilkan saiz… ${Math.round(p * 100)}%` : `⏳ ${mode === 'rec' ? 'Merakam' : 'Menyediakan'} video… ${Math.round(p * 100)}%`;
@@ -3342,6 +3343,48 @@ function rosterReport(t) {
   return `<section class="rpx-sec"><h3>Senarai ${E.isTeam(t) ? E.teamWord(t) : 'Regu'} (Undian${t.drawLv ? ' imbang tahap' : ''})</h3>
     <div class="rpx-roster">${t.participants.map((p, i) => `<div><b>${esc(E.isTeam(t) ? p.name : 'Regu ' + (i + 1))}</b>${tot(p)}<br>${p.members.map(n => esc(n) + chip(n)).join(' · ')}</div>`).join('')}</div></section>`;
 }
+// 📷 Gambar pertandingan: kad urus (penganjur) + galeri dalam laporan
+function photoCard(t) {
+  if (!canEdit(t)) return '';
+  const P = t.photos || [], local = P.filter(p => !p.c).length;
+  return `<div class="card noprint" id="phCard"><div class="row" style="justify-content:space-between;align-items:center"><b>📷 Gambar pertandingan <span class="muted small">(${P.length}/12)</span></b>
+      ${P.length < 12 ? '<button type="button" class="pill-btn brand small" id="phAdd">➕ Tambah gambar</button>' : ''}</div>
+    <p class="muted small" style="margin:4px 0 8px">Gambar dimasukkan ke dalam laporan (galeri) dan video ringkasan. Boleh pilih beberapa gambar sekaligus; gambar dikecilkan secara automatik.</p>
+    ${local && store.isCloud(t.id) ? `<p class="small" style="margin:0 0 8px">⚠️ ${local} gambar hanya tersimpan di telefon ini. <button type="button" class="pill-btn light small" id="phSync">☁️ Muat naik semula</button></p>` : ''}
+    <div class="ph-grid">${P.map(p => `<div class="ph-it" data-pid="${p.id}"><img data-photo="${p.id}" alt=""><button type="button" class="ph-x" data-del="${p.id}" title="Padam">✕</button>
+      <input type="text" maxlength="60" placeholder="Kapsyen (pilihan)" value="${esc(p.cap || '')}" data-cap="${p.id}"></div>`).join('')}</div></div>`;
+}
+function fillPhotos(t, root = $app) {
+  const els = root.querySelectorAll('img[data-photo]'); if (!els.length) return;
+  import('./photos.js').then(PH => els.forEach(async el => { const d = await PH.getPhoto(t, el.dataset.photo).catch(() => null); if (d) el.src = d; else el.closest('.rpx-ph, .ph-it')?.classList.add('miss'); }));
+}
+function wirePhotos(t) {
+  const add = document.getElementById('phAdd');
+  if (add) add.onclick = () => {
+    const inp = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/*', multiple: true });
+    inp.onchange = async () => {
+      const files = [...(inp.files || [])]; if (!files.length) return;
+      toast(`Memproses ${files.length} gambar…`);
+      try {
+        const PH = await import('./photos.js');
+        const r = await PH.addPhotos(t, files, store.isCloud(t.id));
+        save(t); toast(r.cloudFail ? `${r.added} gambar ditambah. ${r.cloudFail} hanya disimpan di telefon ini (awan belum dibenarkan).` : `${r.added} gambar ditambah 📷`, 4000); render();
+      } catch (e) { toast(e && e.message === 'besar' ? 'Gambar terlalu besar' : 'Gagal: ' + (e.message || e)); }
+    };
+    inp.click();
+  };
+  const sy = document.getElementById('phSync');
+  if (sy) sy.onclick = async () => { try { const PH = await import('./photos.js'); const n = await PH.syncPhotos(t); save(t); toast(`${n} gambar dimuat naik ☁️`); render(); } catch (e) { toast('Gagal: ' + (e.code || e.message || e)); } };
+  $app.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+    if (!confirm('Padam gambar ini?')) return;
+    const PH = await import('./photos.js'); await PH.removePhoto(t, b.dataset.del); save(t); render();
+  });
+  $app.querySelectorAll('[data-cap]').forEach(i => i.onchange = () => { const p = (t.photos || []).find(x => x.id === i.dataset.cap); if (p) { p.cap = i.value.trim(); save(t); } });
+}
+function galleryReport(t) {
+  const P = t.photos || []; if (!P.length) return '';
+  return `<section class="rpx-sec"><h3>Galeri Gambar</h3><div class="rpx-gal">${P.map(p => `<figure class="rpx-ph"><img data-photo="${p.id}" alt="">${p.cap ? `<figcaption>${esc(p.cap)}</figcaption>` : ''}</figure>`).join('')}</div></section>`;
+}
 function reportBody(t, played, resTable) {
   const c = clubOf(t), F = E.SET_FORMATS, nm = id => esc(E.pname(t, id));
   const d = t.date ? new Date(t.date + 'T00:00') : null;
@@ -3375,6 +3418,7 @@ function reportBody(t, played, resTable) {
     ${G.length ? sec(`Keputusan Peringkat ${isRR ? 'Liga' : 'Kumpulan'}`, G.map(g => { const ms = played.filter(m => m.stage === 'group' && m.group === g.name).sort((x, y) => x.gn - y.gn); return ms.length ? `<div class="rpx-blk"><h4>${isRR ? 'Liga' : 'Kumpulan ' + esc(g.name)}</h4>${resultsBy(ms)}</div>` : ''; }).join('').replace(/^/, G.length > 1 ? '<div class="rpx-grid rpx-res">' : '<div>') + '</div>') : ''}
     ${['ko', 'pool'].map(b => { let h = ''; for (let r = 1; r <= (t.rounds[b] || 0); r++) { const ms = played.filter(m => m.bracket === b && m.round === r).sort((x, y) => x.slot - y.slot); if (ms.length) h += `<div class="rpx-blk"><h4>${esc(E.roundName(t, b, r))}</h4>${resultsBy(ms)}</div>`; } return h ? sec(b === 'ko' ? 'Keputusan Kalah Mati' : 'Keputusan Pool Kalah', `<div class="rpx-grid rpx-res">${h}</div>`) : ''; }).join('')}
     ${t.stage === 'done' && t.format !== 'rr' ? sec('Ranking Akhir', rankingHtml(t).replace(/^[^]*?<div class="tw">/, '<div class="tw">').replace(/<div class="foot">[^]*$/, `<p class="rpx-note">* ${RANK_NOTE}</p>`), 'rk-keep') : ''}
+    ${galleryReport(t)}
     ${rosterReport(t)}
     <section class="rpx-sec"><h3>Peraturan &amp; Penentuan Kedudukan</h3><ol class="rules small rpx-rules">${[...rulesOf(t), ...(t.stage === 'done' && t.format !== 'rr' && !E.isMixer(t) ? [RANK_RULE] : [])].map(r => `<li>${esc(r)}</li>`).join('')}</ol>
       <div class="rp-sign"><div><div class="ln"></div>Disediakan oleh<br><small>Nama: ${esc((t.createdBy && t.createdBy.name) || '')}</small></div><div><div class="ln"></div>Disahkan oleh<br><small>Penganjur / Pengurus pertandingan</small></div></div></section>
@@ -3432,7 +3476,8 @@ function viewReport(t) {
       <p><b>Laporan penuh, video ringkasan dan ringkasan keputusan</b> boleh dijana selepas pertandingan tamat${t.format === 'rr' ? '' : ' (termasuk perlawanan akhir kalah mati' + (t.pool !== '0' ? ' dan pool kalah' : '') + ')'}.</p>
       ${canEdit(t) && t.format === 'group_ko' && E.groupStageComplete(t) && !t.rounds.ko ? `<p class="small">Peringkat kumpulan sudah selesai. Seterusnya: jana kalah mati di tab <b>⚔️ Knockout</b>.</p><a class="pill-btn orange" href="#/t/${t.id}/kalahmati"><span class="dot"></span>Ke Knockout</a>` : left ? `<p class="muted small">${left} perlawanan lagi.</p>` : ''}
       ${t.groups.length ? `<p class="muted small">Untuk kongsi kedudukan semasa: tab <b>${t.format === 'rr' ? 'Liga' : 'Kumpulan'}</b> → <b>📷 Gambar kedudukan</b> (termasuk matriks keputusan).</p>
-      <a class="pill-btn orange" href="#/t/${t.id}/kumpulan"><span class="dot"></span>Ke ${t.format === 'rr' ? 'Liga' : 'Kumpulan'}</a>` : ''}</div>`;
+      <a class="pill-btn orange" href="#/t/${t.id}/kumpulan"><span class="dot"></span>Ke ${t.format === 'rr' ? 'Liga' : 'Kumpulan'}</a>` : ''}</div>${photoCard(t)}`;
+    wirePhotos(t); fillPhotos(t);
     return;
   }
   const c = clubOf(t), f = E.SET_FORMATS;
@@ -3451,11 +3496,13 @@ function viewReport(t) {
     ${canEdit(t) ? `<div class="card noprint"><p class="muted small" style="margin-top:0">Laporan lengkap: maklumat, kedudukan, keputusan semua perlawanan${t.rounds.ko ? ', kalah mati' : ''}${t.stage === 'done' ? ' dan ranking' : ''}. Tekan butang di bawah dan pilih <b>Simpan sebagai PDF</b>.</p>
       <button class="pill-btn brand" id="prt"><span class="dot"></span>🖨️ Cetak / Simpan PDF</button>
       <p class="muted small" style="margin:8px 0 0">📄 Dalam skrin cetak, pilih saiz kertas <b>A4</b> (sesetengah telefon memilih Letter secara lalai).</p></div>` : ''}
+    ${photoCard(t)}
     ${canEdit(t) ? recapCard(t) : ''}
     ${canEdit(t) && t.matches.some(m => m.status === 'done') ? `<div class="card noprint"><b>💬 Ringkasan keputusan untuk WhatsApp</b><p class="muted small" style="margin:4px 0 8px">Johan, naib johan, tempat ketiga, statistik dan pautan laporan, sedia untuk dikongsi ke group.</p>
       <div class="row" style="gap:6px;flex-wrap:wrap"><button type="button" class="pill-btn small" style="background:#25d366;color:#fff" id="resWa">💬 Kongsi ke WhatsApp</button><button type="button" class="pill-btn light small" id="resCp">📋 Salin</button><button type="button" class="pill-btn light small" id="resPv">👁️ Lihat mesej</button></div></div>` : ''}
     <div class="card report">${body}</div>`;
   if (canEdit(t)) wireRecap(t);
+  wirePhotos(t); fillPhotos(t);
   if ($app.querySelector('.rpx [data-qr]')) import('./vendor/qrcode.js').then(({ default: qrcode }) => $app.querySelectorAll('.rpx [data-qr]').forEach(el => {
     const q = qrcode(0, 'M'); q.addData(el.dataset.qr); q.make(); el.innerHTML = q.createSvgTag({ cellSize: 4, margin: 1, scalable: true });
   })).catch(() => {});
