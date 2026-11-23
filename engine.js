@@ -145,16 +145,40 @@ export function setIndividualsFromLines(t, lines) {
 // Undian regu/trio: kocok, potong ikut turutan (kad 1–3 = Trio 1 …)
 export function drawUnits(t) {
   const size = isTeam(t) ? (Number(t.teamSize) || 3) : 2;
+  if (t.drawLv) relevel(t);
   const ind = t.individuals;
   if (ind.length < size * 2) throw new Error(`Perlu sekurang-kurangnya ${size * 2} peserta`);
   if (ind.length % size) throw new Error(`Bilangan peserta (${ind.length}) mesti gandaan ${size}. Tambah ${size - ind.length % size} atau buang ${ind.length % size} peserta.`);
   // Kad dicabut satu persatu; setiap pusingan, satu nama ke setiap regu dalam susunan rawak
   // (semua regu dapat orang pertama dahulu, barulah orang kedua, dan seterusnya)
-  const s = shuffle(ind), n = s.length / size, units = Array.from({ length: n }, () => []), order = [];
-  for (let r = 0; r < size; r++) {
-    const perm = shuffle([...Array(n).keys()]);
-    perm.forEach((u, j) => units[u].push(s[r * n + j]));
-    order.push(perm);
+  const n = ind.length / size, units = Array.from({ length: n }, () => []), order = [];
+  if (t.drawLv && lvScheme(t)) {
+    // Undian imbang tahap: kocok, susun ikut tahap (kuat → lemah), bahagi kepada pot. Pot 1 diundi rawak;
+    // pot seterusnya diberi kepada regu yang jumlah tahapnya paling rendah dahulu (cth. Naga + Helang, Singa + Rimau).
+    const known = ind.map(x => lvVal(t, x.name, 'D')).filter(v => v != null), avg = known.length ? known.reduce((a, b) => a + b, 0) / known.length : 0;
+    const val = x => { const v = lvVal(t, x.name, 'D'); return v == null ? avg : v; };
+    const sorted = shuffle(ind).sort((a, b) => val(b) - val(a)), sum = Array(n).fill(0);
+    for (let r = 0; r < size; r++) {
+      const pot = sorted.slice(r * n, r * n + n);
+      const to = r === 0 ? shuffle([...Array(n).keys()]) : shuffle([...Array(n).keys()]).sort((a, b) => sum[a] - sum[b]);
+      pot.forEach((x, j) => { units[to[j]].push(x); sum[to[j]] += val(x); });
+      order.push(to);
+    }
+    // baiki: tukar ahli pot yang sama antara dua unit jika jurang jumlah tahap mengecil
+    const tot = u => u.reduce((x, y) => x + val(y), 0), spread = () => { const v = units.map(tot); return Math.max(...v) - Math.min(...v); };
+    for (let it = 0; it < 400 && size > 2; it++) {
+      const i = Math.floor(Math.random() * n), j = Math.floor(Math.random() * n), r = 1 + Math.floor(Math.random() * (size - 1)); if (i === j) continue;
+      const before = spread(); [units[i][r], units[j][r]] = [units[j][r], units[i][r]];
+      if (spread() > before) [units[i][r], units[j][r]] = [units[j][r], units[i][r]];
+    }
+    const mix = shuffle([...Array(n).keys()]), U = mix.map(i => units[i]); units.length = 0; units.push(...U);
+  } else {
+    const s = shuffle(ind);
+    for (let r = 0; r < size; r++) {
+      const perm = shuffle([...Array(n).keys()]);
+      perm.forEach((u, j) => units[u].push(s[r * n + j]));
+      order.push(perm);
+    }
   }
   t.drawOrder = { ...(t.drawOrder || {}), units: order };
   t.participants = units.map((u, i) => ({
@@ -930,13 +954,21 @@ export function buildPool(t) {
 export const HC_SCHEMES = {
   ksas: { name: 'KSAS dalaman', capS: 99, capD: 5, levels: [
     ['NE', 'Naga Elit', 7, 5], ['N', 'Naga', 5, 3], ['S', 'Singa', 2, 2], ['R', 'Rimau', 1, 1], ['H', 'Helang', 0, 0]] },
+  // Carrom KSAS: Naga, Singa, Rimau, Helang (tiada Naga Elit). Nilai lalai boleh diubah penganjur (t.lvVals); double = jumlah dua ahli. Kelebihan maks. 9 buah.
+  carrom: { name: 'KSAS Carrom', capS: 9, capD: 9, levels: [['N', 'Naga', 3, 3], ['S', 'Singa', 2, 2], ['R', 'Rimau', 1, 1], ['H', 'Helang', 0, 0]] },
   kroni: { name: 'Kroni Shell', capS: 99, capD: 5, levels: [
     ['N', 'Naga', 6, 5], ['L', 'Lion', 4, 4], ['LW', 'Lion (W)', 3, 3], ['T', 'Tiger', 2, 2], ['TW', 'Tiger (W)', 1, 1], ['H', 'Helang', 1, 1], ['HW', 'Helang (W)', 0, 0]] },
 };
 export const rubberTypes = t => !isTeam(t) ? ['S'] : t.tieFormat === 'SSD' ? ['S', 'S', 'D'] : ['S', 'D'];
 const lvKey = n => String(n || '').trim().toLowerCase();
 // Teks tahap → kod (cth. "Naga Elit", "ne", "singa", "lion w", "wanita tiger", "Helang (W)")
-export const lvScheme = t => HC_SCHEMES[t.hcMode] ? t.hcMode : HC_SCHEMES[t.mixLv] ? t.mixLv : '';
+export const lvScheme = t => HC_SCHEMES[t.hcMode] ? t.hcMode : HC_SCHEMES[t.mixLv] ? t.mixLv : t.drawLv && isDrawMode(t.entryMode) ? 'carrom' : '';
+// Skim tahap dengan nilai yang ditetapkan penganjur (carrom sahaja)
+export function schemeOf(t) {
+  const k = lvScheme(t), S = HC_SCHEMES[k]; if (!S) return null;
+  if (k !== 'carrom' || !t.lvVals) return S;
+  return { ...S, levels: S.levels.map(l => { const v = t.lvVals[l[0]]; return v === '' || v == null || isNaN(+v) ? l : [l[0], l[1], +v, +v]; }) };
+}
 export function parseLevel(t, txt) {
   const S = HC_SCHEMES[lvScheme(t)]; if (!S || !txt) return '';
   let s = lvKey(txt).replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -954,7 +986,7 @@ function takeLevel(t, e) {
   if (c) e.name.split(' & ').forEach(n => { if (!e.name.includes(' & ') || true) t.levels[lvKey(n)] = c; });
 }
 export const levelOf = (t, name) => (t.levels || {})[lvKey(name)] || '';
-export function levelInfo(t, code) { const S = HC_SCHEMES[lvScheme(t)]; return S && S.levels.find(l => l[0] === code) || null; }
+export function levelInfo(t, code) { const S = schemeOf(t); return S && S.levels.find(l => l[0] === code) || null; }
 export function setLevel(t, name, code) { t.levels ||= {}; if (code) t.levels[lvKey(name)] = code; else delete t.levels[lvKey(name)]; }
 // Nilai: S = single, D = double
 export const lvVal = (t, name, kind) => { const L = levelInfo(t, levelOf(t, name)); return L ? (kind === 'S' ? L[2] : L[3]) : null; };

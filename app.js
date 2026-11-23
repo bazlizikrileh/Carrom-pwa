@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.10.0';
+const VERSION = 'C1.11.0';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -629,7 +629,7 @@ function settingsFormAll(t, locked) {
     <div data-show="mixer" class="notice small" style="margin:8px 0">🔀 <b>Regu bertukar:</b> setiap pusingan pemain diundi menjadi regu baharu. Mata dikira untuk setiap individu (menang, kemudian beza set dan beza mata). Pasangan yang sama dielakkan.</div>
     <div data-show="mixer" class="grid2">
       <div><label>Bilangan pusingan</label><input name="mixRounds" type="number" min="1" max="40" value="${t.mixRounds || ''}" placeholder="Kosong = penuh (semua berpasangan sekali)" ${dis}></div>
-      <div><label>Imbang regu ikut tahap</label><select name="mixLv" ${dis}>${opt({ '': 'Tidak (undian bebas)', ksas: 'Tahap KSAS', kroni: 'Tahap Kroni Shell' }, t.mixLv || '')}</select></div>
+      <div><label>Imbang regu ikut tahap</label><select name="mixLv" ${dis}>${opt({ '': 'Tidak (undian bebas)', carrom: 'Tahap KSAS (Naga · Singa · Rimau · Helang)', ...(t.mixLv && t.mixLv !== 'carrom' ? { [t.mixLv]: E.HC_SCHEMES[t.mixLv].name } : {}) }, t.mixLv || '')}</select></div>
     </div>
     <label data-show="mixer" class="check" style="margin-top:10px"><input type="checkbox" name="mixFast" ${t.mixFast === true ? 'checked' : ''} ${dis}> <span>⚡ <b>Papan pantas</b>: papan yang tamat terus diisi dengan 4 pemain yang bebas (pasangan diundi ketika itu)<br><small class="muted">Lebih cepat (anggaran jimat ~40 minit untuk 12 pemain / 2 papan) kerana tiada papan menunggu papan lain. Semua pemain tetap main sama banyak; pasangan berulang sangat jarang. Jadual sesi 2 dan seterusnya menjadi anggaran sahaja. Jika tidak ditanda, ikut jadual sesi yang tetap.</small></span></label>
     <p data-show="mixer" class="muted small" style="margin:4px 0 0">Kosong = penuh: setiap pemain berpasangan dengan semua pemain lain sekali (cth. 12 pemain → 11 kali main). Isi nombor untuk pusingan lebih pendek. Tahap ditulis dalam senarai individu, cth. <i>Ali (Naga)</i>. Jika Handicap ikut tahap dipilih, tahap itu juga digunakan untuk imbang.</p>
@@ -640,8 +640,12 @@ function settingsFormAll(t, locked) {
     </div>
     <label class="check" data-show="team" style="margin-top:10px"><input type="checkbox" name="splitKO" ${t.splitKO !== false ? 'checked' : ''}> <span>⚪ Kalah mati: <b>main serentak</b> jika ada papan kosong<br><small class="muted">Single dan Double dalam pertemuan yang sama boleh dimainkan di papan berlainan pada masa yang sama.</small></span></label>
     <p class="muted small" style="margin:6px 0 0">⚪⚫ Keputusan sahaja: rekod siapa menang setiap game (tiada skor mata). Warna buah (Putih/Coklat lwn Hitam) diundi oleh app untuk setiap perlawanan dan bertukar setiap game.</p>
-    <label>Handicap</label><select name="hcMode">${opt({ off: 'Tiada', manual: 'Ada — nilai 0–10 setiap peserta' }, t.hcMode === 'manual' || t.handicap ? 'manual' : 'off')}</select>
-    <div data-show="hcOn"><label>Jenis kelebihan handicap</label><select name="hcType">${opt(HC_TYPES, hcTypeOf(t))}</select>
+    <div data-show="drawLvBox"><label>Cara undian regu</label><select name="drawLv" ${dis}>${opt({ '': 'Undian bebas (rawak)', lv: 'Imbang ikut tahap' }, t.drawLv ? 'lv' : '')}</select>
+      <p class="muted small" style="margin:4px 0 0">Imbang: pemain disusun ikut tahap dan dibahagi kepada pot; pot kuat diundi dahulu, kemudian pot lemah diberi kepada regu yang paling lemah. Tahap ditulis dalam senarai, cth. <i>Ali (Naga)</i>, atau dipilih semasa pendaftaran.</p></div>
+    <label>Handicap</label><select name="hcMode">${opt({ off: 'Tiada', carrom: 'Ikut tahap KSAS', manual: 'Manual (nilai 0–10)' }, t.hcMode === 'carrom' ? 'carrom' : t.hcMode === 'manual' || (t.handicap && !E.HC_SCHEMES[t.hcMode]) ? 'manual' : E.HC_SCHEMES[t.hcMode] ? t.hcMode : 'off')}</select>
+    <div data-show="lvVals"><label>Nilai setiap tahap</label><div class="lv-vals">${E.HC_SCHEMES.carrom.levels.map(l => `<label>${l[1]}<input type="number" name="lvv_${l[0]}" min="0" max="9" value="${esc(String((t.lvVals || {})[l[0]] ?? l[2]))}"></label>`).join('')}</div>
+      <p class="muted small" style="margin:4px 0 0">Digunakan untuk imbang undian dan handicap ikut tahap. Regu = jumlah nilai dua ahli. Handicap = beza nilai kedua-dua pihak (maks. 9 buah), cth. Naga + Helang (3) lwn Singa + Rimau (3) → tiada handicap.</p></div>
+    <div data-show="hcAny"><label>Jenis kelebihan handicap</label><select name="hcType">${opt(HC_TYPES, hcTypeOf(t))}</select>
       <p class="muted small" style="margin:4px 0 0">Kelebihan = beza nilai kedua-dua pihak (maks. 9 buah). Contoh: nilai 3 lwn 1 → pihak bernilai 1 mula dengan 2 buah sudah dikeluarkan.</p></div>
 
     <div data-show="groups">
@@ -674,7 +678,7 @@ function settingsFormAll(t, locked) {
     <label class="check"><input type="checkbox" name="regOpen" ${t.regOpen ? 'checked' : ''}> Buka pendaftaran melalui pautan</label>
     ${t.regOpen && !regOn(t) ? '<p class="notice small" style="margin:4px 0 8px">🔒 Pendaftaran ditutup secara automatik kerana jadual telah dijana. Reset jadual untuk membukanya semula.</p>' : ''}
     <div data-show="reg">
-      ${E.HC_SCHEMES[t.hcMode] ? `<label>Tahap dibenarkan</label><div class="lv-allow">${E.HC_SCHEMES[t.hcMode].levels.map(l => `<label class="check"><input type="checkbox" name="regLv" value="${l[0]}" ${!(t.regLevels || []).length || t.regLevels.includes(l[0]) ? 'checked' : ''}> ${esc(l[1])}</label>`).join('')}</div><p class="muted small" style="margin-top:0">Tanda semua = terbuka kepada semua tahap.</p>` : ''}
+      ${E.schemeOf(t) ? `<label>Tahap dibenarkan</label><div class="lv-allow">${E.schemeOf(t).levels.map(l => `<label class="check"><input type="checkbox" name="regLv" value="${l[0]}" ${!(t.regLevels || []).length || t.regLevels.includes(l[0]) ? 'checked' : ''}> ${esc(l[1])}</label>`).join('')}</div><p class="muted small" style="margin-top:0">Tanda semua = terbuka kepada semua tahap.</p>` : ''}
     </div>
 
 `;
@@ -696,7 +700,8 @@ function wireForm(form) {
       if (own && !form.club.value) form.club.value = (cloud.state.user && !cloud.state.user.anon && (cloud.state.user.name || '').split(' ')[0]) || ls.get('carrom:myname') || ''; }
     show('tieRule', (form.entryMode.value === 'team' && form.tieFormat.value === 'SSD' && Number(form.teamSize.value) >= 4) || (form.entryMode.value !== 'team' && form.groupFormat.value === 'F2'));
     show('clubLogo', ['lain', 'kroni', 'sendiri'].includes(form.clubId.value));
-    show('reg', form.regOpen.checked); if (form.hcMode) show('hcOn', form.hcMode.value === 'manual');
+    show('reg', form.regOpen.checked); if (form.hcMode) { show('hcOn', form.hcMode.value === 'manual'); show('hcAny', form.hcMode.value !== 'off'); }
+    { const em = form.entryMode && form.entryMode.value, dd = em === 'double_draw' || em === 'team'; show('drawLvBox', dd); show('lvVals', (form.hcMode && form.hcMode.value === 'carrom') || (dd && form.drawLv && form.drawLv.value === 'lv') || (em === 'mixer' && form.mixLv && form.mixLv.value === 'carrom')); }
     form.querySelector('[data-label="gf"]').textContent = mx ? 'Format setiap perlawanan' : f === 'rr' ? 'Format liga' : f === 'ko' ? 'Format (tidak digunakan)' : 'Format kumpulan';
     const c = CLUBS[form.clubId.value];
     form.querySelector('#clubPrev').innerHTML = c ? `${c.logos.map(src => `<span class="logo-badge"><img src="${src}" alt=""></span>`).join('')}<span class="muted small">${esc(c.name)}</span>` : '';
@@ -715,6 +720,8 @@ function readSettings(form, t) {
   t.date = v('date'); t.startTime = v('startTime');
   t.sessionMin = Math.max(5, Number(v('sessionMin')) || 30);
   t.hcMode = v('hcMode'); t.handicap = t.hcMode !== 'off';
+  if (form.drawLv) t.drawLv = form.drawLv.value === 'lv';
+  { const L = {}; E.HC_SCHEMES.carrom.levels.forEach(l => { const el = form['lvv_' + l[0]]; if (el && el.value !== '' && +el.value !== l[2]) L[l[0]] = Math.max(0, Math.min(9, +el.value)); }); t.lvVals = Object.keys(L).length ? L : undefined; if (!t.lvVals) delete t.lvVals; }
   t.tieRule = v('tieRule') || 'draw';
   t.groupFormat = v('groupFormat'); t.koFormat = v('koFormat'); if (form.liveAuto) t.liveAuto = form.liveAuto.checked; if (form.splitKO) t.splitKO = form.splitKO.checked;
   t.koMode = v('koMode'); t.pool = v('pool'); t.poolMode = v('poolMode');
@@ -724,7 +731,7 @@ function readSettings(form, t) {
   if (form.maxBoards) t.maxBoards = Number(v('maxBoards')) || 0;
   t.waEnabled = false;   // lapor skor melalui WhatsApp tidak lagi digunakan (PIN + jaga skor)
   t.regOpen = form.regOpen.checked; t.regNote = v('regNote').trim(); t.regCond = String(v('regCond') || '').trim();
-  { const S = E.HC_SCHEMES[t.hcMode], ch = [...form.querySelectorAll('input[name=regLv]')]; if (S && ch.length) { const sel = ch.filter(x => x.checked).map(x => x.value); t.regLevels = sel.length === ch.length ? [] : sel; } }
+  { const S = E.schemeOf(t), ch = [...form.querySelectorAll('input[name=regLv]')]; if (S && ch.length) { const sel = ch.filter(x => x.checked).map(x => x.value); t.regLevels = sel.length === ch.length ? [] : sel; } }
   t.regFee = v('regFee').trim(); t.regMaxText = String(v('regMax') || '').trim(); t.regMax = Number((t.regMaxText.match(/\d+/) || [0])[0]) || 0; t.prizes = v('prizes').trim();
   if (!form.entryMode.disabled) {
     t.entryMode = v('entryMode'); t.teamSize = Number(v('teamSize')) || 3; t.format = v('format');
@@ -765,7 +772,7 @@ function viewNew() {
 // ---------- Tetapan & peserta ----------
 function entryHint(t) {
   const ex = t.entryMode === 'double' ? 'Ali &amp; Abu, Farmasi' : 'Ali, Farmasi';
-  const hc = t.hcMode === 'manual' ? ' (2)' : E.HC_SCHEMES[t.hcMode] ? (t.hcMode === 'kroni' ? ' (Lion W)' : ' (Naga)') : '';
+  const hc = t.hcMode === 'manual' ? ' (2)' : E.schemeOf(t) ? (E.lvScheme(t) === 'kroni' ? ' (Lion W)' : ' (Naga)') : '';
   return `Satu ${t.entryMode === 'double' ? 'pasangan' : 'nama'} setiap baris, cth. <i>${ex}${hc}</i>`;
 }
 
@@ -822,7 +829,7 @@ function viewSetupCore(t, part = 'tetapan') {
         <div class="row" style="margin-top:10px"><button type="button" class="pill-btn light" id="saveP">Simpan senarai</button>
           ${mixer ? '' : `<button type="button" class="pill-btn orange" id="undi"><span class="dot"></span>Undi ${unit.toLowerCase()}</button>`}</div>` : `
         <p class="muted small">${entryHint(t)}</p>
-        <textarea id="people">${esc(t.participants.map(p => p.name + (p.unit ? ', ' + p.unit : '') + (t.hcMode === 'manual' && p.hc ? ` (${p.hc})` : '') + (E.HC_SCHEMES[t.hcMode] && !p.name.includes(' & ') && E.levelOf(t, p.name) ? ` (${E.levelInfo(t, E.levelOf(t, p.name))[1]})` : '')).join('\n'))}</textarea>
+        <textarea id="people">${esc(t.participants.map(p => p.name + (p.unit ? ', ' + p.unit : '') + (t.hcMode === 'manual' && p.hc ? ` (${p.hc})` : '') + (E.schemeOf(t) && !p.name.includes(' & ') && E.levelOf(t, p.name) ? ` (${E.levelInfo(t, E.levelOf(t, p.name))[1]})` : '')).join('\n'))}</textarea>
         <div class="row" style="margin-top:10px"><button type="button" class="pill-btn light" id="saveP">Simpan senarai</button></div>`}
       ${!locked && isTest ? `<div class="test-seed"><button type="button" class="pill-btn small seed" id="seed24">👥 Isi 24 peserta (UJIAN)</button>
         <span class="muted small">${t.entryMode === 'single' ? '24 pemain' : t.entryMode === 'double' ? '12 pasangan' : '24 individu sedia untuk diundi'}</span></div>` : ''}
@@ -1720,7 +1727,9 @@ function rulesOf(t) {
   rules.push('Warna buah: app mengundi pihak yang bermain ⚪ Putih/Coklat dan ⚫ Hitam bagi setiap perlawanan (dipapar dalam jadual). Jika terbaik 3 game, warna bertukar setiap game. Putih/Coklat memulakan game.', 'Keputusan sahaja direkod: siapa menang setiap game. Tiada skor mata.');
   if (!E.isMixer(t)) rules.push('Jika mata sama, susunan ditentukan mengikut turutan: (1) beza menang-kalah bilangan perlawanan, (2) beza menang-kalah bilangan game, (3) keputusan bersemuka (pertemuan sesama peserta yang masih sama; jika tiga atau lebih, bilangan kemenangan sesama mereka). Contoh: 5-2 (+3).');
   const HS = E.HC_SCHEMES[t.hcMode];
+  if (t.drawLv && (t.entryMode === 'double_draw' || E.isTeam(t))) rules.push(`Undian ${E.isTeam(t) ? E.teamWord(t).toLowerCase() : 'regu'} diimbangkan ikut tahap: pemain disusun ikut tahap dan dibahagi kepada pot; pot kuat diundi dahulu, kemudian setiap pot seterusnya diberi kepada ${E.isTeam(t) ? E.teamWord(t).toLowerCase() : 'regu'} yang jumlah tahapnya paling rendah (cth. Naga + Helang, Singa + Rimau).`);
   if (t.hcMode === 'manual') rules.push(hcTypeOf(t) === 'buah' ? 'Handicap: angka dalam kurungan (0–10) ialah nilai handicap peserta. Pihak dengan angka lebih rendah menerima kelebihan sebanyak beza angka kedua-dua pihak (maks. 9): bilangan buahnya sendiri yang dikeluarkan dari papan sebelum setiap game bermula.' : 'Handicap: angka dalam kurungan (0–10) ialah nilai handicap peserta. Kelebihan diberi kepada pihak dengan angka lebih rendah mengikut peraturan penganjur.');
+  else if (t.hcMode === 'carrom') { const L = E.schemeOf(t) || HS; rules.push(`Handicap ikut tahap KSAS. Nilai: ${L.levels.map(l => `${l[1]} ${l[2]}`).join(', ')}. Regu: nilai dua ahli dijumlahkan. Pihak bernilai rendah menerima kelebihan sebanyak beza nilai (maks. 9)${hcTypeOf(t) === 'buah' ? ': bilangan buahnya sendiri dikeluarkan dari papan sebelum setiap game bermula' : ''}.`); }
   else if (HS) rules.push(`Handicap ${HS.name} (mata mula setiap game). Nilai single: ${HS.levels.map(l => `${l[1]} ${l[2]}`).join(', ')}. Single: pihak bernilai rendah mula dengan beza nilai (cth. ${HS.levels[HS.levels.length - 1][1]} lwn ${HS.levels[0][1]}: mula ${HS.levels[0][2] - HS.levels[HS.levels.length - 1][2]}-0). Nilai double: ${HS.levels.map(l => `${l[1]} ${l[3]}`).join(', ')}. Double: nilai dua ahli dijumlahkan, beza maksimum ${HS.capD} mata.`);
   rules.push('Jika kaedah di atas gagal, penganjur berhak menggunakan kaedah yang difikirkan perlu dan munasabah. Keputusan penganjur adalah muktamad.');
   return rules;
@@ -1771,7 +1780,7 @@ function rosterOf(t) {
   return out;
 }
 function levelsCard(t) {
-  const S = E.HC_SCHEMES[E.lvScheme(t)]; if (!S) return '';
+  const S = E.schemeOf(t); if (!S) return '';
   const P = personsOf(t); if (!P.length) return '';
   const hcOn = !!E.HC_SCHEMES[t.hcMode];   // tahap untuk handicap, atau hanya untuk imbang regu (regu bertukar)
   const admin = canAdmin(t), missing = P.filter(n => !E.levelOf(t, n)).length;
@@ -1989,7 +1998,7 @@ function regCard(t) {
   if (!regOn(t) && !regs.length) return `<div class="card">${shareRow(t)}</div>`;
   const rows = [...rosterOf(t), ...(admin ? regs.filter(r => r.status === 'no') : [])];
   const mine = regs.find(r => r.uid === uid), ok = regs.filter(r => r.status === 'ok');
-  const S = E.HC_SCHEMES[t.hcMode], lvName = c => { const L = E.levelInfo(t, c); return L ? L[1] : ''; };
+  const S = E.schemeOf(t), lvName = c => { const L = E.levelInfo(t, c); return L ? L[1] : ''; };
   const notIn = ok.filter(r => !personsOf(t).some(n => n.toLowerCase() === r.name.toLowerCase()));
   const formHtml = r => `<div class="reg-form" id="regForm" ${mine && !r ? 'hidden' : ''}>
       <label>Nama penuh</label><input id="rgFull" maxlength="80" value="${esc(r ? r.full || '' : cloud.state.user?.name || '')}" placeholder="cth. Mohd Hazlan bin Mohd Haliman">
@@ -2118,12 +2127,12 @@ function wireProfileCard(root = document) {
 const myRegTids = () => { try { return JSON.parse(ls.get('carrom:myRegs') || '[]'); } catch { return []; } };
 let _rgEdit = null;
 function condTags(t) {
-  const S = E.HC_SCHEMES[t.hcMode], lv = (t.regLevels || []).length && S ? S.levels.filter(l => t.regLevels.includes(l[0])).map(l => l[1]) : [];
+  const S = E.schemeOf(t), lv = (t.regLevels || []).length && S ? S.levels.filter(l => t.regLevels.includes(l[0])).map(l => l[1]) : [];
   return `${t.regCond ? `<span class="role-chip cond">⚠️ ${esc(condShort(t.regCond))}</span>` : ''}${lv.length ? `<span class="role-chip cond">🎚️ ${esc(lv.join(', '))} sahaja</span>` : ''}`;
 }
 // ---------- Halaman pendaftaran berasingan: #/daftar/<id> ----------
 function viewDaftar(t) {
-  const c = clubOf(t), f = E.SET_FORMATS, S = E.HC_SCHEMES[t.hcMode];
+  const c = clubOf(t), f = E.SET_FORMATS, S = E.schemeOf(t);
   if (!store.isCloud(t.id)) { $app.innerHTML = '<div class="card"><p class="muted">Pendaftaran hanya untuk pertandingan di awan.</p></div>'; return; }
   cloud.watchRegistrations(t.id);
   const uid = cloud.myUid(), mineList = (cloud.state.regs[t.id] || []).filter(r => uid && r.uid === uid), regs = rosterOf(t), ok = regs.filter(r => r.status === 'ok');
@@ -2153,7 +2162,7 @@ function viewDaftar(t) {
       <p class="muted small" style="margin-bottom:0">Tiada log masuk diperlukan. Butiran anda diingati di telefon ini, jadi pendaftaran seterusnya hanya satu tekan, dan nama anda dikenal pasti secara automatik untuk notifikasi.</p></div>`;
   const info = [['📅', fmtDate(t.date)], ['⏰', t.startTime ? E.sessionTime(t, 1) : ''], ['📍', t.venue === 'X' ? t.venueName : E.VENUES[t.venue]],
     ['⚪', `${E.isTeam(t) ? E.teamWord(t) + (t.tieFormat === 'SSD' ? ' (Single + Single + Double)' : '') : ENTRY[t.entryMode]} · ${f[t.groupFormat].label}`],
-    ['⚖️', t.hcMode === 'manual' ? 'Handicap' : S ? `Handicap ${S.name}` : ''], ['💰', t.regFee ? 'Yuran: ' + t.regFee : '']].filter(x => x[1]);
+    ['⚖️', t.hcMode === 'manual' ? 'Handicap' : E.HC_SCHEMES[t.hcMode] ? `Handicap ${S.name}` : ''], ['💰', t.regFee ? 'Yuran: ' + t.regFee : '']].filter(x => x[1]);
   const prizes = (t.prizes || '').split('\n').map(x => x.trim()).filter(Boolean);
   const okN = regs.filter(x => x.status === 'ok').length, full = t.regMax && okN >= t.regMax && !r;
   const showForm = regOn(t) && !full && (first || _rgEdit);
