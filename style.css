@@ -877,3 +877,7 @@ table.rp-mx td.sets span { white-space:nowrap; display:inline-block; margin-righ
 .rk-s { font-size:12.5px; color: var(--muted); }
 .rk-t { margin-top:8px; display:flex; flex-direction:column; gap:4px; }
 .rk-t a { display:flex; justify-content:space-between; gap:8px; font-size:13px; text-decoration:none; color: var(--ink); padding:6px 0; border-top:1px solid var(--line); }
+/* laporan: banner foto tanpa teks (nisbah 1200×480) */
+.rpx-banner { display:block; width:100%; aspect-ratio: 1200 / 480; object-fit: cover; border-radius:14px; margin-bottom:8px; }
+.st-sub { font-size:10px; color: var(--muted); font-weight:600; line-height:1.1; }
+@media print { .rpx-banner { break-inside: avoid; } }
