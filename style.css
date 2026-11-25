@@ -1055,32 +1055,51 @@ body.tv .as-bar { display:none; }
 }
 .b3-nm { overflow-wrap:break-word; word-break:normal; hyphens:auto; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; max-width:100%; }
 .tv-cr .tvb .b3-nm { font-size: clamp(12px, min(4.8cqw, 7.5cqh), 44px); }
-/* Double: rakan sepasukan bertentangan */
-.b3.quad { --S: 84px; --NW: 64px; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap:6px; padding:8px 6px; }
-.q-g { display:grid; grid-template-columns: var(--NW) var(--S) var(--NW); grid-template-rows: auto var(--S) auto; align-items:center; justify-items:center; gap:4px; }
+/* Double: rakan sepasukan bertentangan; skor regu di atas & bawah papan */
+.b3.quad { display:flex; flex-direction:column; align-items:stretch; gap:6px; padding:8px; --S: min(170px, 46vw); --NW: 1fr; }
+.q-sc { display:flex; align-items:center; gap:8px; padding:4px 10px; border-radius:10px; background: rgba(107,63,23,.10); min-width:0; }
+.q-sc span { flex:1; min-width:0; font-weight:700; font-size:13px; line-height:1.15; overflow-wrap:break-word; }
+.q-sc b { font-family: var(--num); font-weight:900; font-size:30px; line-height:1; color:#6b3f17; }
+.q-sc.win { background: rgba(53,208,127,.18); }
+.q-g { display:grid; grid-template-columns: minmax(0,1fr) var(--S) minmax(0,1fr); grid-template-rows: auto var(--S) auto; align-items:center; justify-items:center; gap:4px 6px; }
 .q-g .b3-b { grid-column:2; grid-row:2; }
-.q-n { display:flex; flex-direction:column; align-items:center; text-align:center; font-weight:800; font-size:12px; line-height:1.15; overflow-wrap:break-word; max-width:100%; min-width:0; }
-.q-n span { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
-.q-n small { font-size:10px; font-weight:700; color:#b45309; }
-.q-n.t { grid-column:2; grid-row:1; max-width: calc(var(--S) + 2 * var(--NW)); } .q-n.bt { grid-column:2; grid-row:3; max-width: calc(var(--S) + 2 * var(--NW)); }
+.q-n { display:flex; flex-direction:column; align-items:center; text-align:center; font-weight:800; font-size:13px; line-height:1.15; min-width:0; max-width:100%; }
+.q-n span { display:inline-flex; align-items:center; gap:5px; overflow-wrap:break-word; }
+.q-n.l span, .q-n.r span { text-align:left; }
+.q-n small { font-size:10.5px; font-weight:700; color:#b45309; }
+.q-n.t { grid-column:1 / -1; grid-row:1; } .q-n.bt { grid-column:1 / -1; grid-row:3; }
 .q-n.l { grid-column:1; grid-row:2; } .q-n.r { grid-column:3; grid-row:2; }
-.q-n.t span, .q-n.bt span { -webkit-line-clamp:1; white-space:nowrap; text-overflow:ellipsis; display:block; }
-.q-sc { display:flex; flex-direction:column; align-items:center; text-align:center; gap:2px; min-width:0; }
-.q-sc b { font-family: var(--num); font-weight:900; font-size:34px; line-height:1; color:#6b3f17; }
-.q-sc small { font-size:11px; color:#6b3f17; white-space:nowrap; } .q-sc span { font-size:10.5px; line-height:1.15; opacity:.8; overflow-wrap:break-word; max-width:100%; }
-.b3-coin.qa { left:50%; top:89.5%; } .b3-coin.qb { left:10.5%; top:50%; }
-/* Mod TV */
-.tv-cr .b3.quad.tvb { --S: min(24cqw, 30cqh); --NW: min(16cqw, 30cqh); gap:1.5cqw; }
-.tv-cr .tvb .q-g { gap: min(.8cqw, 1.2cqh); }
-.tv-cr .tvb .q-n { font-size: clamp(11px, min(3.4cqw, 5.4cqh), 30px); color:#fff; } .tv-cr .tvb .q-n small { font-size: clamp(9px, min(2.6cqw, 4cqh), 18px); color:#ffb02e; }
-.tv-cr .tvb .q-sc b { font-size: clamp(22px, min(14cqw, 22cqh), 120px); color:#ffd166; }
-.tv-cr .tvb .q-sc small { font-size: clamp(10px, min(3cqw, 4.6cqh), 20px); color:#ffe7b0; } .tv-cr .tvb .q-sc span { font-size: clamp(10px, min(2.8cqw, 4.4cqh), 20px); }
-@media (orientation: portrait) { .tv-cr .b3.quad.tvb { --S: 24cqw; --NW: 17cqw; } .tv-cr .tvb .q-n { font-size: clamp(11px, 3.6cqw, 22px); } .tv-cr .tvb .q-sc b { font-size: clamp(22px, 13cqw, 70px); } }
-.q-coin { display:block; width:14px; height:14px; border-radius:50%; margin-top:3px; box-shadow:0 1px 2px rgba(0,0,0,.4); }
+.q-coin { display:inline-block; flex:none; width:14px; height:14px; border-radius:50%; box-shadow:0 1px 2px rgba(0,0,0,.4); }
 .q-coin.w { background: radial-gradient(circle at 35% 35%, #fff, #e8dcc6 60%, #c9b590); }
 .q-coin.k { background: radial-gradient(circle at 35% 35%, #555, #1a1a1a 60%, #000); }
-.tv-cr .tvb .q-coin { width: clamp(12px, min(3.4cqw, 5.4cqh), 30px); height: clamp(12px, min(3.4cqw, 5.4cqh), 30px); }
-
-.tv-cr .tvb.quad .q-n { font-size: clamp(10px, min(3.3cqw, 4.6cqh), 28px); } .tv-cr .tvb.quad .q-n small { font-size: clamp(8px, min(2.4cqw, 3.4cqh), 16px); line-height:1.1; }
-.tv-cr .tvb.quad .q-coin { width: clamp(10px, min(3cqw, 4.2cqh), 26px); height: clamp(10px, min(3cqw, 4.2cqh), 26px); margin-top: .4cqh; }
-.tv-cr .tvb.quad .q-n.t span, .tv-cr .tvb.quad .q-n.bt span { line-height:1.05; }
+.b3-coin.qa { left:50%; top:89.5%; } .b3-coin.qb { left:10.5%; top:50%; }
+/* papan single lebih besar */
+.b3:not(.quad) { --S: min(130px, 34vw); }
+/* ---- Mod TV ---- */
+.tv-cr .b3.tvb:not(.quad) { --S: min(38cqw, 60cqh); }
+.tv-cr .b3.quad.tvb { --S: min(30cqw, 44cqh); flex-direction:row; align-items:center; gap: 1.5cqw; padding: .5cqh 1cqw; }
+.tv-cr .tvb.quad .q-sc { flex:1 1 0; flex-direction:column; justify-content:center; text-align:center; align-self:stretch; padding: 1cqh 1cqw; gap: .8cqh; }
+.tv-cr .tvb.quad .q-sc span { flex:none; }
+.tv-cr .tvb.quad .q-sc b { order:3; font-size: clamp(20px, min(13cqw, 22cqh), 110px); }
+.tv-cr .tvb.quad .q-g { flex:none; grid-template-columns: min(13cqw, 20cqh) var(--S) min(13cqw, 20cqh); }
+.tv-cr .tvb .q-sc { background: rgba(255,255,255,.07); padding: .6cqh 2cqw; gap: 2cqw; }
+.tv-cr .tvb .q-sc span { color:#fff; font-size: clamp(11px, min(4cqw, 5cqh), 32px); }
+.tv-cr .tvb .q-sc b { color:#ffd166; font-size: clamp(18px, min(9cqw, 9cqh), 80px); }
+.tv-cr .tvb .q-sc .q-coin, .tv-cr .tvb .q-n .q-coin { width: clamp(11px, min(3.4cqw, 4.4cqh), 28px); height: clamp(11px, min(3.4cqw, 4.4cqh), 28px); }
+.tv-cr .tvb .q-n { color:#fff; font-size: clamp(11px, min(4cqw, 4.8cqh), 32px); }
+.tv-cr .tvb .q-n small { color:#ffb02e; font-size: clamp(9px, min(2.8cqw, 3.4cqh), 20px); }
+@media (orientation: portrait) {
+  .tv-cr { grid-auto-rows: max-content !important; }
+  .tv-cr .tv-tt { container-type: inline-size !important; height:auto; overflow:visible; min-height:max-content; }
+  .tv-cr .b3.tvb { flex:none !important; }
+  .tv-cr .b3.tvb:not(.quad) { --S: 36cqw; }
+  .tv-cr .b3.quad.tvb { --S: 48cqw; gap:8px; flex-direction:column; align-items:stretch; }
+  .tv-cr .tvb.quad .q-sc { flex-direction:row; text-align:left; align-self:auto; padding: 4px 3cqw; gap:3cqw; }
+  .tv-cr .tvb.quad .q-sc span { flex:1; }
+  .tv-cr .tvb.quad .q-g { grid-template-columns: minmax(0,1fr) var(--S) minmax(0,1fr); }
+  .tv-cr .tvb .q-sc span { font-size: clamp(12px, 4.2cqw, 26px); } .tv-cr .tvb .q-sc b { font-size: clamp(20px, 9cqw, 56px); }
+  .tv-cr .tvb .q-n { font-size: clamp(12px, 4.2cqw, 26px); } .tv-cr .tvb .q-n small { font-size: clamp(10px, 3cqw, 18px); }
+  .tv-cr .tvb .q-sc .q-coin, .tv-cr .tvb .q-n .q-coin { width: clamp(12px, 3.6cqw, 22px); height: clamp(12px, 3.6cqw, 22px); }
+  .tv-cr .tv-sub, .tv-cr .tv-next { font-size: clamp(12px, 3.6cqw, 20px); }
+  .tv-cr .tv-tno { font-size: clamp(14px, 5cqw, 28px); }
+}

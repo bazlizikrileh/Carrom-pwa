@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.15.3';
+const VERSION = 'C1.15.4';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -2657,8 +2657,8 @@ function boardRow(t, m, x, q) {
   const brd = (cn) => `<div class="b3-b"><i class="pk p1"></i><i class="pk p2"></i><i class="pk p3"></i><i class="pk p4"></i><div class="b3-p"><i class="bl l"></i><i class="bl r"></i><i class="bl t"></i><i class="bl b"></i><i class="b3-c"></i>${cn}</div></div>`;
   if (q) {
     const ca = E.colourOf(m, 'a', gk), cb = E.colourOf(m, 'b', gk), wa = E.whiteSide(m, gk);
-    const nm = (n, c, pos, brk) => `<div class="q-n ${pos}"><span>${esc(n)}</span><i class="q-coin ${c}"></i>${brk && !fin ? '<small>pukul dahulu</small>' : ''}</div>`;
-    const sc = (k, c) => `<div class="q-sc ${k ? 'b' : 'a'}">${fin ? (r.winner === (k ? m.b : m.a) ? '<small>🏆 MENANG</small>' : '<small>&nbsp;</small>') : `<small>${CDOT[c]} ${c === 'w' ? 'Putih' : 'Hitam'}</small>`}<b>${big[k]}</b><span>${esc(E.pname(t, k ? m.b : m.a))}</span></div>`;
+    const nm = (n, c, pos, brk) => `<div class="q-n ${pos}"><span><i class="q-coin ${c}"></i>${esc(n)}</span>${brk && !fin ? '<small>pukul dahulu</small>' : ''}</div>`;
+    const sc = (k, c) => `<div class="q-sc ${k ? 'b' : 'a'}${fin && r.winner === (k ? m.b : m.a) ? ' win' : ''}"><i class="q-coin ${c}"></i><span>${esc(E.pname(t, k ? m.b : m.a))}${fin && r.winner === (k ? m.b : m.a) ? ' 🏆' : ''}</span><b>${big[k]}</b></div>`;
     const cn = fin ? '' : `<i class="b3-coin ${ca} qa"></i><i class="b3-coin ${cb} qb"></i>`;
     return `${sc(0, ca)}<div class="q-g">${nm(q[0][1], ca, 't')}${nm(q[1][0], cb, 'l', wa === 'b')}${brd(cn)}${nm(q[1][1], cb, 'r')}${nm(q[0][0], ca, 'bt', wa === 'a')}</div>${sc(1, cb)}`;
   }
@@ -2995,7 +2995,7 @@ function tvSlides(t) {
   const { live, cand } = LV.liveState(t);
   // papan langsung: maks. 12 papan setiap slaid (pertandingan carrom boleh guna hingga 40 papan)
   if (live.length || cand.length) { const n = LV.tableList(t).length, pg = Math.ceil(n / TV_PER) || 1; for (let i = 0; i < pg; i++) S.push({ k: 'live', p: i, pages: pg, sec: pg > 1 ? 15 : 20 }); }
-  for (let i = 0; i < t.groups.length; i += 2) S.push({ k: 'groups', g: t.groups.slice(i, i + 2), sec: 15 });
+  // carrom: kedudukan kumpulan tidak dipapar di Mod TV
   if (t.rounds.ko) S.push({ k: 'ko', sec: 18 });
   if (t.rounds.pool) S.push({ k: 'pool', sec: 15 });
   if (t.stage === 'done' && t.format !== 'rr') S.push({ k: 'champ', sec: 15 });
