@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.16.2';
+const VERSION = 'C1.16.3';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -382,14 +382,17 @@ function cdText(t) {
 let _cdTimer = null;
 // Foto latar banner pertandingan: poster sendiri jika dimuat naik, jika tidak foto carrom ikut gaya poster (dikunci) atau ID
 const POSTER_IMG = { malam: 'board-angle', atas: 'board-top', dekat: 'coins-close', kelab: 'board-top', tarikh: 'coins-close', klasik: 'board-top', majalah: 'board-top', tiket: 'coins-close', belah: 'coins-close', ratu: 'board-top' };
+// Gaya poster dikunci: disimpan dalam data pertandingan (t.posterStyle) supaya sama di semua telefon; kunci lama di telefon ini sebagai sandaran
+const posterLock = t => t.posterStyle || ls.get('carrom:posterLock:' + t.id) || '';
 function bannerImg(t, photoOnly = false) {
   const own = !photoOnly && posterOf(t); if (own) return own;
-  const lk = ls.get('carrom:posterLock:' + t.id), L = ['board-angle', 'board-top', 'coins-close'];
+  const lk = posterLock(t), L = ['board-angle', 'board-top', 'coins-close'];
   if (POSTER_IMG[lk]) return `img/${POSTER_IMG[lk]}.webp`;
   let h = 0; for (const ch of String(t.id)) h = (h * 31 + ch.charCodeAt(0)) | 0;
   return `img/${L[Math.abs(h) % L.length]}.webp`;
 }
 function renderHead(t, page) {
+  { const old = ls.get('carrom:posterLock:' + t.id); if (old && !t.posterStyle && canAdmin(t)) { t.posterStyle = old; ls.set('carrom:posterLock:' + t.id, null); save(t); } }
   clearInterval(_cdTimer);
   _cdTimer = setInterval(() => { const el = document.getElementById('cdown'); if (!el) return clearInterval(_cdTimer); if (startAt(t) <= Date.now()) { clearInterval(_cdTimer); renderHead(t, page); } else el.innerHTML = cdText(t); }, 1000);
   const c = clubOf(t);
@@ -1945,7 +1948,7 @@ async function showRegPoster(t, auto = false, combo = null) {
     document.getElementById('rpAuto').onclick = () => showRegPoster(t, true);
     document.getElementById('rpShare').onclick = async () => {
       const blob = await (await fetch(own)).blob(), m = await import('./reg-poster.js');
-      const r = await m.shareBlob(blob, `Poster-${t.name.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-')}.${blob.type.includes('webp') ? 'webp' : 'jpg'}`, t.name);
+      const r = await m.shareBlob(blob, `Poster-${t.name.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-')}.${blob.type.includes('webp') ? 'webp' : 'jpg'}`, t.name, waText(t));
       if (r === 'download') toast('Poster dimuat turun ke telefon');
     };
     return;
@@ -1957,25 +1960,26 @@ async function showRegPoster(t, auto = false, combo = null) {
   md.hidden = false; md.onclick = e => { if (e.target === md || e.target.id === 'mx') md.hidden = true; };
   try {
     const K = await import('./poster-kit.js'), CP = await import('./carrom-poster.js'), m = await import('./reg-poster.js');
-    const lockKey = 'carrom:posterLock:' + t.id, locked = ls.get(lockKey);
+    const lockKey = 'carrom:posterLock:' + t.id, locked = posterLock(t);
     if (!combo || !CP.STYLES[combo]) combo = locked && CP.STYLES[locked] ? locked : CP.STYLE_KEYS[Math.floor(Math.random() * CP.STYLE_KEYS.length)];
     document.getElementById('rpBar').innerHTML = `<select id="rpSel" style="width:auto">${opt(CP.STYLES, combo)}</select>
       <button type="button" class="pill-btn small orange" id="rpRand">🎲 Gaya lain</button>
-      <button type="button" class="pill-btn small ${locked === combo ? 'brand' : 'light'}" id="rpLock">${locked === combo ? '📌 Dikunci' : '📌 Kunci gaya ini'}</button>`;
+      ${canAdmin(t) ? `<button type="button" class="pill-btn small ${locked === combo ? 'brand' : 'light'}" id="rpLock">${locked === combo ? '📌 Dikunci' : '📌 Kunci gaya ini'}</button>` : ''}`;
     document.getElementById('rpSel').onchange = e => showRegPoster(t, true, e.target.value);
     document.getElementById('rpRand').onclick = () => { const i = CP.STYLE_KEYS.indexOf(combo); showRegPoster(t, true, CP.STYLE_KEYS[(i + 1) % CP.STYLE_KEYS.length]); };
-    document.getElementById('rpLock').onclick = () => { ls.set(lockKey, locked === combo ? null : combo); showRegPoster(t, true, combo); };
+    { const lb = document.getElementById('rpLock'); if (lb) lb.onclick = () => { const v = locked === combo ? null : combo; ls.set(lockKey, null); if (v) t.posterStyle = v; else delete t.posterStyle; save(t); toast(v ? '📌 Gaya poster dikunci untuk semua' : 'Kunci dibuka'); showRegPoster(t, true, combo); }; }
     const blob = await K.withSponsors(await CP.makeCarromPoster(regPosterData(t), combo), sponsorsOf(t));
     const name = `Poster-${(t.name || 'pertandingan').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-')}.png`;
     document.getElementById('rpBox').innerHTML = `<img src="${URL.createObjectURL(blob)}" alt="Poster" class="rp-img">
       <div class="btn-stack" style="margin-top:10px"><button class="pill-btn orange" id="rpShare"><span class="dot"></span>📤 Kongsi poster</button></div>
       <p class="muted small" style="text-align:center">Kod QR membawa terus ke halaman ${regLive(t) ? 'pendaftaran' : 'pertandingan'}. Jana semula untuk kemas kini bilangan tempat.</p>`;
-    document.getElementById('rpShare').onclick = async () => { const r = await m.shareBlob(blob, name, t.name); if (r === 'download') toast('Poster dimuat turun ke telefon'); };
+    document.getElementById('rpShare').onclick = async () => { const r = await m.shareBlob(blob, name, t.name, waText(t)); if (r === 'download') toast('Poster dimuat turun ke telefon'); };
   } catch (e) { document.getElementById('rpBox').innerHTML = `<p>Gagal menjana poster: ${esc(e.message || String(e))}</p>`; }
 }
 function shareRow(t) {
   return `<div class="share-row"><span class="muted small">🔗 Kongsi:</span>
-    <a class="pill-btn small" style="background:#25d366;color:#fff" target="_blank" rel="noopener" href="${waLink(waText(t))}">WhatsApp</a>
+    <button type="button" class="pill-btn small" style="background:#25d366;color:#fff" data-share="wapost">🖼️ WhatsApp + poster</button>
+    <a class="pill-btn small light" target="_blank" rel="noopener" href="${waLink(waText(t))}">💬 Teks sahaja</a>
     <button type="button" class="pill-btn light small" data-share="msg">📋 Salin mesej</button>
     <button type="button" class="pill-btn light small" data-share="copy">🔗 Salin pautan</button>
     <button type="button" class="pill-btn light small" data-share="preview">👁️ Lihat mesej</button>
@@ -1987,6 +1991,7 @@ function wireShare(t) {
   $app.querySelectorAll('[data-share]').forEach(b => (b.onclick = async () => {
     const k = b.dataset.share;
     if (k === 'poster') return showRegPoster(t);
+    if (k === 'wapost') return showRegPoster(t);   // poster (sendiri / gaya dikunci) + mesej sebagai kapsyen
     const txt = k === 'copy' ? shareUrl(t) : waText(t);
     if (k === 'preview') {
       const md = document.getElementById('modal');
