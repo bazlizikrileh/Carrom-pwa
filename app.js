@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.16.3';
+const VERSION = 'C1.16.4';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -1936,6 +1936,22 @@ function wirePosterAdmin(t) {
   };
   if (del) del.onclick = async () => { if (!confirm('Buang poster sendiri? Poster automatik akan digunakan semula.')) return; await cloud.delPoster(t.id).catch(e => toast('Gagal: ' + (e.code || e.message))); };
 }
+// Kongsi terus poster (sendiri, atau gaya dikunci / gaya pertama) bersama mesej pendaftaran sebagai kapsyen
+async function sharePosterWA(t, btn) {
+  const lab = btn && btn.innerHTML; if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Menyediakan poster…'; }
+  try {
+    const m = await import('./reg-poster.js'), own = posterOf(t), nm = (t.name || 'pertandingan').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-');
+    let blob, name;
+    if (own) { blob = await (await fetch(own)).blob(); name = `Poster-${nm}.${blob.type.includes('webp') ? 'webp' : 'jpg'}`; }
+    else {
+      const K = await import('./poster-kit.js'), CP = await import('./carrom-poster.js'), st = CP.STYLES[posterLock(t)] ? posterLock(t) : CP.STYLE_KEYS[0];
+      blob = await K.withSponsors(await CP.makeCarromPoster(regPosterData(t), st), sponsorsOf(t)); name = `Poster-${nm}.png`;
+    }
+    const r = await m.shareBlob(blob, name, t.name, waText(t));
+    if (r === 'download') { try { await navigator.clipboard.writeText(waText(t)); } catch {} toast('Poster dimuat turun & mesej disalin. Buka WhatsApp, lampirkan poster dan tampal mesej.', 6000); }
+  } catch (e) { toast('Gagal: ' + (e.message || e), 4000); }
+  finally { if (btn) { btn.disabled = false; btn.innerHTML = lab; } }
+}
 async function showRegPoster(t, auto = false, combo = null) {
   const own = !auto && posterOf(t);
   if (own) {
@@ -1991,7 +2007,7 @@ function wireShare(t) {
   $app.querySelectorAll('[data-share]').forEach(b => (b.onclick = async () => {
     const k = b.dataset.share;
     if (k === 'poster') return showRegPoster(t);
-    if (k === 'wapost') return showRegPoster(t);   // poster (sendiri / gaya dikunci) + mesej sebagai kapsyen
+    if (k === 'wapost') return sharePosterWA(t, b);   // terus ke senarai kongsi: poster + mesej sebagai kapsyen
     const txt = k === 'copy' ? shareUrl(t) : waText(t);
     if (k === 'preview') {
       const md = document.getElementById('modal');
