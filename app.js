@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.16.4';
+const VERSION = 'C1.17.0';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -3055,11 +3055,16 @@ function viewLive(t) {
 // ---------- 📺 Mod TV / skrin besar: slaid bertukar sendiri ----------
 const _tv = { i: 0, timer: null, id: null };
 function stopTV() { clearInterval(_tv.timer); _tv.timer = null; _tv.id = null; }
+function tvTables(t) {
+  const { occ } = LV.liveState(t), all = LV.tableList(t), on = all.filter(({ k }) => occ[k]);
+  return on.length ? on : all;
+}
 function tvSlides(t) {
   const S = [];
   const { live, cand } = LV.liveState(t);
   // papan langsung: maks. 12 papan setiap slaid (pertandingan carrom boleh guna hingga 40 papan)
-  if (live.length || cand.length) { const n = LV.tableList(t).length, pg = Math.ceil(n / TV_PER) || 1; for (let i = 0; i < pg; i++) S.push({ k: 'live', p: i, pages: pg, sec: pg > 1 ? 15 : 20 }); }
+  // hanya papan yang sedang dimainkan (tiada → semua papan bila ada calon); maks. 12 papan setiap slaid
+  if (live.length || cand.length) { const n = tvTables(t).length, pg = Math.ceil(n / TV_PER) || 1; for (let i = 0; i < pg; i++) S.push({ k: 'live', p: i, pages: pg, sec: pg > 1 ? 15 : 20 }); }
   // carrom: kedudukan kumpulan tidak dipapar di Mod TV
   if (t.rounds.ko) S.push({ k: 'ko', sec: 18 });
   if (t.rounds.pool) S.push({ k: 'pool', sec: 15 });
@@ -3070,10 +3075,11 @@ function tvSlides(t) {
 function tvSlideHtml(t, sl) {
   if (sl.k === 'live') {
     const { occ, xr } = LV.liveState(t), nx = LV.nextUp(t), U = LV.umpirePlan(t);
-    const all = LV.tableList(t), list = all.slice((sl.p || 0) * TV_PER, ((sl.p || 0) + 1) * TV_PER), n = list.length;
-    const cols = n <= 1 ? 1 : n <= 4 ? 2 : n <= 6 ? 3 : n === 9 ? 3 : 4;
-    return `<h2 class="tv-h">🟢 Sedang berlangsung${sl.pages > 1 ? ` <small class="tv-pg">Papan ${list[0].k}–${list[n - 1].k} · ${sl.p + 1}/${sl.pages}</small>` : ''}</h2>
-      <div class="tv-tables tv-cr" style="--tvc:${cols};--tvr:${Math.ceil(n / cols)}">${list.map(({ k }) => {
+    const tot = LV.tableList(t).length, all = tvTables(t), on = all.filter(({ k }) => occ[k]).length;
+    const list = all.slice((sl.p || 0) * TV_PER, ((sl.p || 0) + 1) * TV_PER), n = list.length;
+    const cols = n <= 1 ? 1 : n <= 4 ? 2 : n <= 6 ? 3 : n === 9 ? 3 : 4, colsP = n <= 3 ? 1 : 2;
+    return `<h2 class="tv-h">🟢 Sedang berlangsung <small class="tv-cnt">${on} papan dimainkan${tot - on > 0 ? ` · ${tot - on} kosong` : ''}</small>${sl.pages > 1 ? ` <small class="tv-pg">${sl.p + 1}/${sl.pages}</small>` : ''}</h2>
+      <div class="tv-tables tv-cr" style="--tvc:${cols};--tvr:${Math.ceil(n / cols)};--tvcp:${colsP};--tvrp:${Math.ceil(n / colsP)}">${list.map(({ k }) => {
       const m = occ[k], ri = xr[k], u = m && ri == null ? LV.umpireOf(t, m, U) : '', x = m ? liveOf(t, m, m.id + (ri != null ? '~' + ri : '')) : null;
       const sub = m ? `${x ? `<span class="lv-dot"></span> <b class="lv-set">${setTag(t, x, m)}</b> · ` : `<b class="lv-set">GAME 1/${E.fmtFor(t, m.stage).bo}</b> · `}${esc(E.stageLabel(t, m))}${u ? ` · 🟣 ${esc(E.pname(t, u))}` : ''}` : '';
       return `<div class="tv-tt ${m ? '' : 'free'}${x && !liveDone(t, m, x) && (x.rs[x.ri] || []).length && new Set((x.rs[x.ri] || []).map(g => g[0] > g[1])).size > 1 && E.fmtFor(t, m.stage).bo - (x.rs[x.ri] || []).length === 1 ? ' hot' : ''}"><div class="tv-tno">PAPAN ${esc(k)}</div>
@@ -3102,28 +3108,29 @@ function viewTV(t) {
   document.body.classList.add('tv');
   if (store.isCloud(t.id)) cloud.watchLive(t.id, 10000);
   const c = clubOf(t), S = tvSlides(t);
-  if (_tv.id !== t.id) { stopTV(); _tv.id = t.id; _tv.i = 0; }
+  if (_tv.id !== t.id) { stopTV(); _tv.id = t.id; _tv.i = 0; _tv.until = 0; }
   const sl = S[_tv.i % S.length];
+  // masa slaid disimpan: lukisan semula (skor disimpan, data dikemas kini) tidak memulakan kiraan dari awal
+  if (!_tv.until || _tv.sk !== sl.k + (_tv.i % S.length)) { _tv.until = Date.now() + sl.sec * 1000; _tv.sk = sl.k + (_tv.i % S.length); }
   const play = t.matches.filter(m => m.status !== 'bye' && m.a !== 'BYE' && m.b !== 'BYE'), done = play.filter(m => m.status === 'done').length;
   $app.innerHTML = `<div class="tv-wrap">
     <div class="tv-top">${c.logos.map(x => `<img src="${esc(x)}" alt="">`).join('')}<div class="tv-title"><b>${esc(t.name)}</b><span>${esc(c.short || '')}${t.date ? ' · ' + esc(fmtDate(t.date)) : ''}</span></div>
       <div class="tv-stat"><small>Perlawanan</small><b>${done}<em>/${play.length}</em></b></div><div class="tv-clock" id="tvClock"></div></div>
     <div class="tv-body" id="tvBody">${tvSlideHtml(t, sl)}</div>
     <div class="tv-foot">${sponsorStrip(t)}<span class="tv-dots">${S.map((_, i) => `<i class="${i === _tv.i % S.length ? 'on' : ''}"></i>`).join('')}</span>
-      <span class="tv-ctl"><button id="tvPrev">◀</button><button id="tvNext">▶</button><button id="tvFs">⛶ Skrin penuh</button><a href="#/t/${t.id}/langsung">✕ Keluar</a></span></div></div>`;
+      ${S.length > 1 ? `<i class="tv-prog" style="--d:${sl.sec}s;--p:${Math.max(0, Math.min(1, 1 - (_tv.until - Date.now()) / (sl.sec * 1000)))}"></i>` : ''}<span class="tv-ctl"><button id="tvPrev">◀</button><button id="tvNext">▶</button><button id="tvFs">⛶ Skrin penuh</button><a href="#/t/${t.id}/langsung">✕ Keluar</a></span></div></div>`;
   const fit = $app.querySelector('.tv-fit');
   if (fit) { const inner = fit.querySelector('.tv-scale'); if (inner) { const sc = Math.min(1.6, (fit.clientWidth - 30) / inner.scrollWidth, (fit.clientHeight - 30) / inner.scrollHeight); inner.style.transform = `scale(${sc})`; inner.style.transformOrigin = 'top center'; } }
   const clock = () => { const el = document.getElementById('tvClock'); if (el) el.textContent = new Date().toLocaleTimeString('ms-MY', { hour: 'numeric', minute: '2-digit' }); };
   clock();
-  const go = d => { _tv.i = (_tv.i + d + S.length) % S.length; viewTV(load(t.id) || t); };
+  const go = d => { _tv.i = (_tv.i + d + S.length) % S.length; _tv.until = 0; viewTV(load(t.id) || t); };
   document.getElementById('tvPrev').onclick = () => go(-1);
   document.getElementById('tvNext').onclick = () => go(1);
   document.getElementById('tvFs').onclick = () => { const el = document.documentElement; (document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen && el.requestFullscreen()).catch?.(() => {}); };
   clearInterval(_tv.timer);
-  let left = sl.sec;
   _tv.timer = setInterval(() => {
     clock(); const cd = document.getElementById('cdown'); if (cd) cd.innerHTML = cdText(t);
-    if (--left <= 0) go(1);
+    if (S.length > 1 && Date.now() >= _tv.until) go(1);
   }, 1000);
 }
 document.addEventListener('keydown', e => { if (!document.body.classList.contains('tv')) return; if (e.key === 'ArrowRight') document.getElementById('tvNext')?.click(); if (e.key === 'ArrowLeft') document.getElementById('tvPrev')?.click(); });
