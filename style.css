@@ -1070,8 +1070,17 @@ body.tv .as-bar { display:none; }
 .q-sc small { font-size:11px; color:#6b3f17; white-space:nowrap; } .q-sc span { font-size:10.5px; line-height:1.15; opacity:.8; overflow-wrap:break-word; max-width:100%; }
 .b3-coin.qa { left:50%; top:89.5%; } .b3-coin.qb { left:10.5%; top:50%; }
 /* Mod TV */
-.tv-cr .b3.quad.tvb { --S: min(26cqw, 46cqh); --NW: min(16cqw, 30cqh); gap:1.5cqw; }
+.tv-cr .b3.quad.tvb { --S: min(24cqw, 30cqh); --NW: min(16cqw, 30cqh); gap:1.5cqw; }
+.tv-cr .tvb .q-g { gap: min(.8cqw, 1.2cqh); }
 .tv-cr .tvb .q-n { font-size: clamp(11px, min(3.4cqw, 5.4cqh), 30px); color:#fff; } .tv-cr .tvb .q-n small { font-size: clamp(9px, min(2.6cqw, 4cqh), 18px); color:#ffb02e; }
 .tv-cr .tvb .q-sc b { font-size: clamp(22px, min(14cqw, 22cqh), 120px); color:#ffd166; }
 .tv-cr .tvb .q-sc small { font-size: clamp(10px, min(3cqw, 4.6cqh), 20px); color:#ffe7b0; } .tv-cr .tvb .q-sc span { font-size: clamp(10px, min(2.8cqw, 4.4cqh), 20px); }
 @media (orientation: portrait) { .tv-cr .b3.quad.tvb { --S: 24cqw; --NW: 17cqw; } .tv-cr .tvb .q-n { font-size: clamp(11px, 3.6cqw, 22px); } .tv-cr .tvb .q-sc b { font-size: clamp(22px, 13cqw, 70px); } }
+.q-coin { display:block; width:14px; height:14px; border-radius:50%; margin-top:3px; box-shadow:0 1px 2px rgba(0,0,0,.4); }
+.q-coin.w { background: radial-gradient(circle at 35% 35%, #fff, #e8dcc6 60%, #c9b590); }
+.q-coin.k { background: radial-gradient(circle at 35% 35%, #555, #1a1a1a 60%, #000); }
+.tv-cr .tvb .q-coin { width: clamp(12px, min(3.4cqw, 5.4cqh), 30px); height: clamp(12px, min(3.4cqw, 5.4cqh), 30px); }
+
+.tv-cr .tvb.quad .q-n { font-size: clamp(10px, min(3.3cqw, 4.6cqh), 28px); } .tv-cr .tvb.quad .q-n small { font-size: clamp(8px, min(2.4cqw, 3.4cqh), 16px); line-height:1.1; }
+.tv-cr .tvb.quad .q-coin { width: clamp(10px, min(3cqw, 4.2cqh), 26px); height: clamp(10px, min(3cqw, 4.2cqh), 26px); margin-top: .4cqh; }
+.tv-cr .tvb.quad .q-n.t span, .tv-cr .tvb.quad .q-n.bt span { line-height:1.05; }
