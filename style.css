@@ -1055,3 +1055,23 @@ body.tv .as-bar { display:none; }
 }
 .b3-nm { overflow-wrap:break-word; word-break:normal; hyphens:auto; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; max-width:100%; }
 .tv-cr .tvb .b3-nm { font-size: clamp(12px, min(4.8cqw, 7.5cqh), 44px); }
+/* Double: rakan sepasukan bertentangan */
+.b3.quad { --S: 84px; --NW: 64px; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap:6px; padding:8px 6px; }
+.q-g { display:grid; grid-template-columns: var(--NW) var(--S) var(--NW); grid-template-rows: auto var(--S) auto; align-items:center; justify-items:center; gap:4px; }
+.q-g .b3-b { grid-column:2; grid-row:2; }
+.q-n { display:flex; flex-direction:column; align-items:center; text-align:center; font-weight:800; font-size:12px; line-height:1.15; overflow-wrap:break-word; max-width:100%; min-width:0; }
+.q-n span { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.q-n small { font-size:10px; font-weight:700; color:#b45309; }
+.q-n.t { grid-column:2; grid-row:1; max-width: calc(var(--S) + 2 * var(--NW)); } .q-n.bt { grid-column:2; grid-row:3; max-width: calc(var(--S) + 2 * var(--NW)); }
+.q-n.l { grid-column:1; grid-row:2; } .q-n.r { grid-column:3; grid-row:2; }
+.q-n.t span, .q-n.bt span { -webkit-line-clamp:1; white-space:nowrap; text-overflow:ellipsis; display:block; }
+.q-sc { display:flex; flex-direction:column; align-items:center; text-align:center; gap:2px; min-width:0; }
+.q-sc b { font-family: var(--num); font-weight:900; font-size:34px; line-height:1; color:#6b3f17; }
+.q-sc small { font-size:11px; color:#6b3f17; white-space:nowrap; } .q-sc span { font-size:10.5px; line-height:1.15; opacity:.8; overflow-wrap:break-word; max-width:100%; }
+.b3-coin.qa { left:50%; top:89.5%; } .b3-coin.qb { left:10.5%; top:50%; }
+/* Mod TV */
+.tv-cr .b3.quad.tvb { --S: min(26cqw, 46cqh); --NW: min(16cqw, 30cqh); gap:1.5cqw; }
+.tv-cr .tvb .q-n { font-size: clamp(11px, min(3.4cqw, 5.4cqh), 30px); color:#fff; } .tv-cr .tvb .q-n small { font-size: clamp(9px, min(2.6cqw, 4cqh), 18px); color:#ffb02e; }
+.tv-cr .tvb .q-sc b { font-size: clamp(22px, min(14cqw, 22cqh), 120px); color:#ffd166; }
+.tv-cr .tvb .q-sc small { font-size: clamp(10px, min(3cqw, 4.6cqh), 20px); color:#ffe7b0; } .tv-cr .tvb .q-sc span { font-size: clamp(10px, min(2.8cqw, 4.4cqh), 20px); }
+@media (orientation: portrait) { .tv-cr .b3.quad.tvb { --S: 24cqw; --NW: 17cqw; } .tv-cr .tvb .q-n { font-size: clamp(11px, 3.6cqw, 22px); } .tv-cr .tvb .q-sc b { font-size: clamp(22px, 13cqw, 70px); } }

@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.15.1';
+const VERSION = 'C1.15.2';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -2630,7 +2630,20 @@ function liveBadge(t, m, cls = 'lv-sc') {
 }
 // Nama di atas papan + skor langsung (jika ada) terus pada setiap sisi papan
 // Papan carrom segi empat sama (pandangan atas) dengan nama, jumlah game & warna buah di kedua-dua sisi — tab Langsung & Mod TV
-function boardRow(t, m, x) {
+// Pemain double: rakan sepasukan duduk bertentangan (A1 bawah, A2 atas; B1 kiri, B2 kanan)
+function quadOf(t, m, ri) {
+  if (E.isTeam(t)) {
+    if (E.rubberTypes(t)[ri] !== 'D') return null;
+    const L = m.lineup || {}; return L.ad1 && L.ad2 && L.bd1 && L.bd2 ? [[L.ad1, L.ad2], [L.bd1, L.bd2]] : null;
+  }
+  const A = E.pobj(t, m.a), B = E.pobj(t, m.b);
+  return A && B && (A.members || []).length === 2 && (B.members || []).length === 2 ? [A.members, B.members] : null;
+}
+function boardHtml(t, m, x, cls, href) {
+  const q = quadOf(t, m, x ? x.ri || 0 : 0), tag = href ? 'a' : 'div';
+  return `<${tag} class="b3 ${q ? 'quad ' : ''}${cls || ''}${x ? ' live' : ''}"${href ? ` href="${href}"` : ''}>${boardRow(t, m, x, q)}</${tag}>`;
+}
+function boardRow(t, m, x, q) {
   const team = E.isTeam(t), f = E.fmtFor(t, m.stage), ri = x ? x.ri || 0 : 0, g = x ? x.rs[ri] || [] : [];
   const gk = Math.min(g.length, f.bo - 1) + (team ? ri : 0), fin = x && liveDone(t, m, x);
   const r = fin ? E.evaluateMatch(t, { ...m, rubbers: x.rs.map(sets => ({ sets })) }) : null;
@@ -2641,6 +2654,14 @@ function boardRow(t, m, x) {
     return `<div class="b3-s ${sd}"><span class="b3-nm">${esc(E.pname(t, id))}</span><span class="b3-pt">${big[k]}</span><span class="b3-tag">${tag}</span></div>`;
   };
   const coin = sd => `<i class="b3-coin ${E.colourOf(m, sd, gk)} ${sd}"></i>`;
+  const brd = (cn) => `<div class="b3-b"><i class="pk p1"></i><i class="pk p2"></i><i class="pk p3"></i><i class="pk p4"></i><div class="b3-p"><i class="bl l"></i><i class="bl r"></i><i class="bl t"></i><i class="bl b"></i><i class="b3-c"></i>${cn}</div></div>`;
+  if (q) {
+    const ca = E.colourOf(m, 'a', gk), cb = E.colourOf(m, 'b', gk), wa = E.whiteSide(m, gk);
+    const nm = (n, c, pos, brk) => `<div class="q-n ${pos}"><span>${CDOT[c]} ${esc(n)}</span>${brk && !fin ? '<small>pukul dahulu</small>' : ''}</div>`;
+    const sc = (k, c) => `<div class="q-sc ${k ? 'b' : 'a'}">${fin ? (r.winner === (k ? m.b : m.a) ? '<small>🏆 MENANG</small>' : '<small>&nbsp;</small>') : `<small>${CDOT[c]} ${c === 'w' ? 'Putih' : 'Hitam'}</small>`}<b>${big[k]}</b><span>${esc(E.pname(t, k ? m.b : m.a))}</span></div>`;
+    const cn = fin ? '' : `<i class="b3-coin ${ca} qa"></i><i class="b3-coin ${cb} qb"></i>`;
+    return `${sc(0, ca)}<div class="q-g">${nm(q[0][1], ca, 't')}${nm(q[1][0], cb, 'l', wa === 'b')}${brd(cn)}${nm(q[1][1], cb, 'r')}${nm(q[0][0], ca, 'bt', wa === 'a')}</div>${sc(1, cb)}`;
+  }
   return `${side('a', 0)}<div class="b3-b"><i class="pk p1"></i><i class="pk p2"></i><i class="pk p3"></i><i class="pk p4"></i><div class="b3-p"><i class="bl l"></i><i class="bl r"></i><i class="bl t"></i><i class="bl b"></i><i class="b3-c"></i>${fin ? '' : coin('a') + coin('b')}</div></div>${side('b', 1)}`;
 }
 function courtSide(t, m, k, x) {
@@ -2903,7 +2924,7 @@ function viewLive(t) {
     const x = m ? liveOf(t, m, lid) : null, iUmp = m && me && u === me;
     const rl = m && E.isTeam(t) && (ri != null || m.xt) ? ` · <b>${ri != null ? esc(E.rubberLabel(t, ri)) : m.rubbers.map((_, i) => i).filter(i => !(m.xt && m.xt[i] != null)).map(i => esc(E.rubberLabel(t, i))).join(' + ')}</b>` : '';
     return `<div class="tt${mine ? ' me' : ''}${m ? '' : ' free'}${x ? ' on' : ''}"><div class="tt-h"><b>PAPAN ${k}</b>${m ? `<small>${x ? `<span class="lv-dot"></span> <b class="lv-set">${setTag(t, x, m)}</b>${liveAgo(x)} · ` : ''}${esc(E.matchCode(m) || '')} · ${esc(E.stageLabel(t, m))}${rl}</small>` : ''}</div>
-      ${m ? `<a class="b3${x ? ' live' : ''}" href="#/t/${t.id}/m/${m.id}">${boardRow(t, m, x)}</a>
+      ${m ? `${boardHtml(t, m, x, '', `#/t/${t.id}/m/${m.id}`)}
         ${x && edit && store.isCloud(t.id) ? `<div class="lv-by2">🎯 Dijaga oleh <b>${esc(x.by || 'tanpa nama')}</b><button type="button" class="pill-btn small light" data-rel="${lid}">🔓 Lepaskan</button></div>` : ''}
         ${u ? `<div class="tt-u">🟣 Pengadil: <b>${esc(E.pname(t, u))}</b></div>` : ''}
         ${scoreMode(t) || iUmp ? `<div class="row tt-act"><a class="pill-btn small orange" href="#/t/${t.id}/m/${m.id}">📝 Isi keputusan</a>${edit && ri == null ? `<button class="pill-btn small light" data-tgh="${m.id}" title="Tangguh">⏸️ Tangguh</button>` : ''}</div>` : ''}`
@@ -2991,7 +3012,7 @@ function tvSlideHtml(t, sl) {
       const m = occ[k], ri = xr[k], u = m && ri == null ? LV.umpireOf(t, m, U) : '', x = m ? liveOf(t, m, m.id + (ri != null ? '~' + ri : '')) : null;
       const sub = m ? `${x ? `<span class="lv-dot"></span> <b class="lv-set">${setTag(t, x, m)}</b> · ` : `<b class="lv-set">GAME 1/${E.fmtFor(t, m.stage).bo}</b> · `}${esc(E.stageLabel(t, m))}${u ? ` · 🟣 ${esc(E.pname(t, u))}` : ''}` : '';
       return `<div class="tv-tt ${m ? '' : 'free'}${x && !liveDone(t, m, x) && (x.rs[x.ri] || []).length && new Set((x.rs[x.ri] || []).map(g => g[0] > g[1])).size > 1 && E.fmtFor(t, m.stage).bo - (x.rs[x.ri] || []).length === 1 ? ' hot' : ''}"><div class="tv-tno">PAPAN ${esc(k)}</div>
-        ${m ? `<div class="b3 tvb${x ? ' live' : ''}">${boardRow(t, m, x)}</div><div class="tv-sub">${sub}</div>` : '<div class="b3 tvb empty"><div class="b3-s"><span class="b3-nm">Kosong</span></div><div class="b3-b"><i class="pk p1"></i><i class="pk p2"></i><i class="pk p3"></i><i class="pk p4"></i><div class="b3-p"><i class="b3-c"></i></div></div><div class="b3-s"></div></div>'}
+        ${m ? `${boardHtml(t, m, x, 'tvb')}<div class="tv-sub">${sub}</div>` : '<div class="b3 tvb empty"><div class="b3-s"><span class="b3-nm">Kosong</span></div><div class="b3-b"><i class="pk p1"></i><i class="pk p2"></i><i class="pk p3"></i><i class="pk p4"></i><div class="b3-p"><i class="b3-c"></i></div></div><div class="b3-s"></div></div>'}
         ${nx[k] ? `<div class="tv-next">⏭️ ${esc(E.pname(t, nx[k].a))} lwn ${esc(E.pname(t, nx[k].b))}</div>` : ''}</div>`;
     }).join('')}</div>`;
   }
