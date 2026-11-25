@@ -1016,3 +1016,42 @@ body.tv .as-bar { display:none; }
 
 .rpx .gal-grid img { height:180px; object-fit:cover; }
 @media print { .rpx .gal-grid img { height:62mm; } }
+
+/* ---------- Papan carrom segi empat sama (tab Langsung & Mod TV) ---------- */
+.b3 { --S: 104px; display:grid; grid-template-columns: minmax(0,1fr) var(--S) minmax(0,1fr); align-items:center; gap:10px; text-decoration:none; color:var(--ink);
+  padding:10px 8px; border-radius:14px; background: linear-gradient(160deg, #f8ecd6, #efdcb9); box-shadow: inset 0 0 0 1px rgba(122,58,18,.18); }
+.b3-s { display:flex; flex-direction:column; align-items:center; text-align:center; gap:3px; min-width:0; }
+.b3-nm { font-weight:800; font-size:14px; line-height:1.15; overflow-wrap:anywhere; }
+.b3-pt { font-family: var(--num); font-weight:900; font-size:34px; line-height:1; color:#6b3f17; }
+.b3-tag { font-size:11.5px; line-height:1.2; color:#6b3f17; } .b3-tag b { color:#b45309; }
+.b3-b { position:relative; width:var(--S); height:var(--S); border-radius: calc(var(--S) * .06); padding: calc(var(--S) * .075);
+  background: linear-gradient(160deg, #5a2f10, #3a1c07); box-shadow: inset 0 0 0 2px #b07a42, 0 4px 10px rgba(0,0,0,.3); }
+.b3-b .pk { position:absolute; width: calc(var(--S) * .09); height: calc(var(--S) * .09); border-radius:50%; background:#0d0603; box-shadow: inset 0 0 0 1.5px #2a1407; z-index:2; }
+.b3-b .p1 { left: calc(var(--S) * .045); top: calc(var(--S) * .045); } .b3-b .p2 { right: calc(var(--S) * .045); top: calc(var(--S) * .045); }
+.b3-b .p3 { left: calc(var(--S) * .045); bottom: calc(var(--S) * .045); } .b3-b .p4 { right: calc(var(--S) * .045); bottom: calc(var(--S) * .045); }
+.b3-p { position:relative; width:100%; height:100%; border-radius: calc(var(--S) * .02);
+  background: repeating-linear-gradient(90deg, rgba(120,70,30,.05) 0 3px, transparent 3px 9px), linear-gradient(160deg, #f6dcae, #e7bf82); }
+.b3-p .bl { position:absolute; border:1px solid rgba(122,58,18,.6); border-radius:2px; }
+.b3-p .bl.l, .b3-p .bl.r { top:18%; bottom:18%; width:5%; } .b3-p .bl.l { left:8%; } .b3-p .bl.r { right:8%; }
+.b3-p .bl.t, .b3-p .bl.b { left:18%; right:18%; height:5%; } .b3-p .bl.t { top:8%; } .b3-p .bl.b { bottom:8%; }
+.b3-c { position:absolute; left:50%; top:50%; width:30%; height:30%; transform:translate(-50%,-50%); border-radius:50%; border:1px solid rgba(122,58,18,.6);
+  background: radial-gradient(circle, #d62828 0 15%, #7a1010 16% 18%, transparent 19%); }
+.b3-coin { position:absolute; top:50%; width:13%; height:13%; transform:translate(-50%,-50%); border-radius:50%; box-shadow: 0 1px 3px rgba(0,0,0,.45); }
+.b3-coin.w { background: radial-gradient(circle at 35% 35%, #fff, #e8dcc6 60%, #c9b590); }
+.b3-coin.k { background: radial-gradient(circle at 35% 35%, #555, #1a1a1a 60%, #000); }
+.b3-coin.a { left:10.5%; } .b3-coin.b { left:89.5%; }
+.b3.empty { opacity:.55; }
+/* Mod TV */
+.tv-cr .tv-tt { container-type: size; }
+.tv-cr .b3.tvb { --S: min(34cqw, 58cqh); flex:1 1 auto; min-height:0; gap:2cqw; padding: 2cqh 2cqw; background:none; box-shadow:none; color:#fff; }
+.tv-cr .tvb .b3-nm { font-size: clamp(12px, min(5.4cqw, 8cqh), 44px); text-shadow:0 1px 3px rgba(0,0,0,.4); }
+.tv-cr .tvb .b3-pt { font-size: clamp(22px, min(16cqw, 24cqh), 130px); color:#ffd166; }
+.tv-cr .tvb .b3-tag { font-size: clamp(10px, min(3.3cqw, 5cqh), 22px); color:#ffe7b0; } .tv-cr .tvb .b3-tag b { color:#ffb02e; }
+.tv-cr .tvb.empty .b3-nm { opacity:.7; }
+@media (orientation: portrait) {
+  .tv-cr .tv-tt { container-type: inline-size; }
+  .tv-cr .b3.tvb { --S: 34cqw; flex:none; }
+  .tv-cr .tvb .b3-nm { font-size: clamp(12px, 5.4cqw, 30px); } .tv-cr .tvb .b3-pt { font-size: clamp(22px, 16cqw, 80px); } .tv-cr .tvb .b3-tag { font-size: clamp(10px, 3.3cqw, 16px); }
+}
+.b3-nm { overflow-wrap:break-word; word-break:normal; hyphens:auto; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; max-width:100%; }
+.tv-cr .tvb .b3-nm { font-size: clamp(12px, min(4.8cqw, 7.5cqh), 44px); }
