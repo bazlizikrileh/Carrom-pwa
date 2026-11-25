@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.16.0';
+const VERSION = 'C1.16.1';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -2755,7 +2755,7 @@ function viewLiveScore(t, mid0) {
   if (!authed) {
     $app.innerHTML = `${back}${eyebrow}<h2 class="h-big" style="font-size:22px">${esc(A)} <span class="muted">lwn</span> ${esc(B)}</h2>
       <div class="card"><div class="section-title" style="margin-top:0">🎯 Jadi penjaga skor</div>
-      <p class="muted small">Masukkan PIN acara dari penganjur. Skor yang anda tekan akan dipaparkan secara langsung kepada semua.</p>
+      <p class="muted small">Pengadil atau pemain perlawanan ini boleh jaga skor. Masukkan PIN acara dari penganjur. Skor yang anda tekan dipaparkan secara langsung kepada semua; keputusan akhir dihantar kepada penganjur untuk disahkan.</p>
       <div class="grid2"><div><label>Nama anda</label><input id="lsBy" value="${esc(ls.get('carrom:myname') || '')}" placeholder="cth. Hatta"></div>
       <div><label>PIN acara</label><input id="lsPin" inputmode="numeric" value="${esc(ls.get('carrom:pin:' + t.id) || '')}" style="font-family:var(--mono)"></div></div>
       <div class="btn-stack" style="margin-top:12px"><button class="pill-btn orange" id="lsGo"><span class="dot"></span>Mula</button></div></div>`;
@@ -2915,7 +2915,7 @@ function viewLiveScore(t, mid0) {
           toast(m.status === 'done' ? 'Keputusan disimpan' : pendAway().length || split ? `${split ? E.rubberLabel(t, only) : 'Keputusan papan ini'} disimpan · menunggu perlawanan lain` : 'Disimpan (penganjur perlu tentukan pemenang)', 3000);
         } else {
           const pin = ls.get('carrom:pin:' + t.id), by = ls.get('carrom:myname') || '';
-          await cloud.submitScore(t.id, { pin, matchId: m.id, a: m.a, b: m.b, rubbers: rs, lineup: m.lineup || null, by, role: 'pengadil', note: split || pendAway().length ? `Papan ${split ? m.xt && m.xt[only] || '' : m.lt || ''} · ${m.rubbers.map((_, i) => i).filter(i => !away(i)).map(i => E.rubberLabel(t, i)).join(' + ')} sahaja` : '' });
+          await cloud.submitScore(t.id, { pin, matchId: m.id, a: m.a, b: m.b, rubbers: rs, lineup: m.lineup || null, by, role: ((me0 => me0 && (m.a === me0 || m.b === me0 || (m.px || []).includes(me0)))(ls.get(meKey(t)))) ? 'pemain' : 'pengadil', note: split || pendAway().length ? `Papan ${split ? m.xt && m.xt[only] || '' : m.lt || ''} · ${m.rubbers.map((_, i) => i).filter(i => !away(i)).map(i => E.rubberLabel(t, i)).join(' + ')} sahaja` : '' });
           PUSH.send(['adm:' + t.id], '🔔 Skor menunggu pengesahan', `${E.matchCode(m)} · ${A} lwn ${B} · oleh ${by || '-'}`, `#/t/${t.id}/keputusan`, 'pend-' + t.id);
           ls.set('carrom:sent:' + lid, '1');
           toast('📤 Dihantar. Menunggu pengesahan penganjur.', 3500);
@@ -2942,7 +2942,8 @@ function viewLive(t) {
   if (me && st && STAT[st.kind]) {
     const [bg, fg, ic, tx] = STAT[st.kind], m = st.m, opp = m.px ? (m.px.slice(0, 2).includes(me) ? m.b : m.a) : m.a === me ? m.b : m.a;
     stTxt = `<div class="me-card" style="background:${bg};color:${fg}"><div class="me-big">${ic} ${tx}</div><div class="me-tb">PAPAN ${st.table}</div>
-      <div class="small">${st.kind === 'ump' ? vsTxt(t, m) : 'Lawan: <b>' + esc(E.pname(t, opp)) + '</b>'} · ${esc(E.stageLabel(t, m))}</div></div>`;
+      <div class="small">${st.kind === 'ump' ? vsTxt(t, m) : 'Lawan: <b>' + esc(E.pname(t, opp)) + '</b>'} · ${esc(E.stageLabel(t, m))}</div>
+      ${st.kind === 'play' || st.kind === 'ump' ? `<a class="pill-btn small light" style="margin-top:8px" href="#/t/${t.id}/ls/${m.id}">🎯 Jaga skor${st.kind === 'play' ? ' / tamatkan game' : ''}</a>` : ''}</div>`;
   } else if (me && st && st.kind === 'wait') stTxt = `<div class="me-card wait"><div class="me-big">⏳ Menunggu</div><div class="small">${st.ahead ? `${st.ahead} perlawanan lagi sebelum giliran anda` : 'Anda dalam giliran seterusnya'} · lawan <b>${esc(E.pname(t, st.m.px ? (st.m.px.slice(0, 2).includes(me) ? st.m.b : st.m.a) : st.m.a === me ? st.m.b : st.m.a))}</b></div></div>`;
   else if (me && st && st.kind === 'none') stTxt = '<div class="me-card wait"><div class="small">Tiada perlawanan menunggu untuk anda buat masa ini.</div></div>';
   else if (me && !st) stTxt = '<div class="me-card wait"><div class="small">Perlawanan belum bermula. Status anda akan dipaparkan di sini.</div></div>';
@@ -2955,7 +2956,7 @@ function viewLive(t) {
       ${m ? `${boardHtml(t, m, x, '', `#/t/${t.id}/m/${m.id}`)}
         ${x && edit && store.isCloud(t.id) ? `<div class="lv-by2">🎯 Dijaga oleh <b>${esc(x.by || 'tanpa nama')}</b><button type="button" class="pill-btn small light" data-rel="${lid}">🔓 Lepaskan</button></div>` : ''}
         ${u ? `<div class="tt-u">🟣 Pengadil: <b>${esc(E.pname(t, u))}</b></div>` : ''}
-        ${scoreMode(t) || iUmp ? `<div class="row tt-act"><a class="pill-btn small orange" href="#/t/${t.id}/ls/${lid}">🎯 Jaga skor</a><a class="pill-btn small light" href="#/t/${t.id}/m/${m.id}">📝 Isi keputusan</a>${edit && ri == null ? `<button class="pill-btn small light" data-tgh="${m.id}" title="Tangguh">⏸️ Tangguh</button>` : ''}</div>` : ''}`
+        ${scoreMode(t) || iUmp || mine ? `<div class="row tt-act"><a class="pill-btn small orange" href="#/t/${t.id}/ls/${lid}">🎯 Jaga skor</a><a class="pill-btn small light" href="#/t/${t.id}/m/${m.id}">📝 Isi keputusan</a>${edit && ri == null ? `<button class="pill-btn small light" data-tgh="${m.id}" title="Tangguh">⏸️ Tangguh</button>` : ''}</div>` : ''}`
       : '<div class="b3 empty"><div class="b3-s"></div><div class="b3-b"><i class="pk p1"></i><i class="pk p2"></i><i class="pk p3"></i><i class="pk p4"></i><div class="b3-p"><i class="b3-c"></i></div></div><div class="b3-s"></div></div><p class="muted small" style="text-align:center;margin:4px 0 0">Papan kosong</p>'}
       ${nx[k] ? `<div class="tt-n">⏭️ Bersedia: ${vsTxt(t, nx[k])}</div>` : ''}</div>`;
   };
