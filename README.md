@@ -5,7 +5,7 @@ Dibina daripada Portal Pingpong (repo `Pingpong-pwa`) dan disesuaikan untuk carr
 
 ## Ciri carrom
 - Acara: single, double pasangan pilihan, double pasangan diundi (trio/kuartet boleh dibuka kemudian; kodnya masih ada).
-- **Keputusan sahaja**: rekod siapa menang setiap game, tiada skor mata. Format: 1 game atau terbaik 3 game (penganjur pilih).
+- **Kiraan buah (KSAS)**: 🎯 Jaga skor — setiap regu mula 9 buah; habis dahulu menang game; baki = buah lawan tinggal. Format: 1 game atau terbaik 3 game (penganjur pilih).
 - **Warna buah diundi** untuk setiap perlawanan (⚪ Putih/Coklat lwn ⚫ Hitam), dipapar dalam jadual, kad papan dan halaman keputusan; bertukar setiap game. Data: `m.wf` = pihak Putih dalam game 1; game = `[1,0]` (A menang) / `[0,1]`.
 - Tiada skor langsung (jaga skor dimatikan; pautan lama dibawa ke halaman keputusan).
 - Menang 3 mata, kalah 0. Pemecah seri: mata → beza perlawanan → beza game → bersemuka.

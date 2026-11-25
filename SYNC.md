@@ -21,7 +21,7 @@ mungkin perlu disalin ke app satu lagi. Setiap kali chat carrom atau chat pingpo
 - `finalRanking` pulangkan `[]` sebelum pertandingan tamat (elak semua peserta jadi "Johan") — carrom C1.5.4 · **pingpong: perlu disemak**
 
 ## Khusus carrom (jangan salin ke pingpong)
-- Keputusan sahaja (pemenang setiap game `[1,0]/[0,1]`), tiada skor langsung
+- Kiraan buah (KSAS): 🎯 Jaga skor kira buah tinggal 9 → 0; game rasmi `[1,0]/[0,1]` + baki setiap game dalam `m.rubbers[i].gb`; pemecah seri Baki ± selepas Game ±. Live: rs game tamat `[baki+1,0]`, cur = buah tinggal `a-b`
 - Warna buah diundi `m.wf`, `colourOf`, siapa pukul dahulu, kad keputusan bercetak
 - Handicap jenis "buah dikeluarkan dahulu" (`hcType`)
 - 10 templat poster foto carrom (`carrom-poster.js`, `img/`), banner foto

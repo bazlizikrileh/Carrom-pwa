@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.15.4';
+const VERSION = 'C1.16.0';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -352,7 +352,7 @@ function render(keep = false) {
     renderHead(t, page);
     const views = { tetapan: viewSetup, pemain: viewPemain, langsung: viewLive, jadual: viewJadual, kumpulan: viewGroups, keputusan: viewResults, kalahmati: viewKnockout, pool: viewPool, laporan: viewReport, ranking: viewRanking, peraturan: viewRules };
     updateTop();
-    if (page === 'qr') viewQR(t); else if (page === 'status') viewStatus(t); else if (page === 'm') viewMatch(t, parts[3]); else if (page === 'ls') { location.replace(`#/t/${t.id}/m/${String(parts[3]).split('~')[0]}`); return; } else if (page === 'kadskor') viewKadSkor(t); else if (views[page]) views[page](t); else { location.hash = '#/'; return; }
+    if (page === 'qr') viewQR(t); else if (page === 'status') viewStatus(t); else if (page === 'm') viewMatch(t, parts[3]); else if (page === 'ls') viewLiveScore(t, parts[3]); else if (page === 'kadskor') viewKadSkor(t); else if (views[page]) views[page](t); else { location.hash = '#/'; return; }
     if (page === 'kumpulan' && t.format === 'rr' && t.stage === 'done') { $app.insertAdjacentHTML('beforeend', '<div class="row" style="margin:12px 0"><button class="pill-btn orange" id="posterBtn"><span class="dot"></span>🏆 Kongsi poster juara</button></div>'); wirePoster(t); }
     // 🏆 kad juara + 📸 galeri: di halaman utama pertandingan selepas tamat; galeri juga di tab Pemain
     if (t.stage === 'done' && page === defaultPage(t)) { $app.insertAdjacentHTML('afterbegin', champHero(t) + galleryBlock(t)); wireGallery(t); }
@@ -1083,7 +1083,7 @@ function matchRow(t, m, no) {
     const b = team ? cols.filter(c => !c.cur && c.b !== '' && c.b > c.a).length : cols.filter(c => c.wb).length;
     return key === 'a' ? a : b;
   };
-  const notes = [h && h.n ? `HC: ${esc(E.pname(t, h.to))} +${h.n}` : '',
+  const notes = [done && bakiTxt(m) ? `🎯 ${bakiTxt(m)}` : '', h && h.n ? `HC: ${esc(E.pname(t, h.to))} +${h.n}` : '',
     ls.get('carrom:draft:' + m.id) && !done ? '<span class="draft">✏️ draf</span>' : '',
     ls.get('carrom:sent:' + m.id) && !done ? '<span class="draft">⏳ menunggu pengesahan</span>' : '',
     _cur && pendingFor(_cur).some(x => x.matchId === m.id) ? '<span class="role-chip">🔔 skor dihantar</span>' : ''].filter(Boolean).join(' · ');
@@ -1165,7 +1165,9 @@ function hcLine(t, who, n) {
 }
 // siapa pukul dahulu (Putih/Coklat memulakan game)
 const breakLine = (t, m, k = 0) => `${E.colourOf(m, 'a', k) === 'w' ? E.pname(t, m.a) : E.pname(t, m.b)} (⚪ Putih/Coklat) pukul dahulu${E.isTeam(t) ? ' dalam perlawanan pertama; warna bertukar setiap perlawanan/game' : E.fmtFor(t, m.stage).bo > 1 ? ' game 1; warna bertukar setiap game' : ''}`;
-const setRuleTxt = t => 'Keputusan sahaja (siapa menang setiap game). Warna buah diundi dan bertukar setiap game';
+// "baki 3, 5, 2" — baki setiap game (buah lawan yang tinggal), jika dicatat
+const bakiTxt = m => { const L = (m.rubbers || []).flatMap(r => (r.sets || []).map((g, k) => (r.gb || [])[k])).filter(v => v != null); return L.length && L.some(v => v > 0) ? 'baki ' + L.join(', ') : ''; };
+const setRuleTxt = t => 'Kiraan warna: setiap regu mula dengan 9 buah warnanya; regu yang habiskan buahnya dahulu menang game; baki = buah lawan yang masih tinggal. Queen tidak dikira. Warna buah diundi dan bertukar setiap game';
 // Tanda game: warna yang menang setiap game (⚪ Putih/Coklat, ⚫ Hitam)
 const CDOT = { w: '⚪', k: '⚫' };
 const gameMarks = m => (m.rubbers[0] ? m.rubbers[0].sets : []).map((g, k) => CDOT[E.colourOf(m, g[0] > g[1] ? 'a' : 'b', k)]).join(' ');
@@ -1254,7 +1256,8 @@ function viewMatch(t, mid) {
   const team = E.isTeam(t), L = m.lineup || {}, edit = canEdit(t);
   const dkey = 'carrom:draft:' + m.id;
   let draft = null; try { draft = JSON.parse(ls.get(dkey) || 'null'); } catch {}
-  const src = m.status !== 'done' && draft ? draft : m.rubbers.map(r => r.sets);
+  // game: [baki+1, 0] / [0, baki+1] (baki = buah lawan tinggal; 0 jika tidak dicatat)
+  const src = m.status !== 'done' && draft ? draft : m.rubbers.map(r => r.sets.map((g, k) => { const b = (r.gb || [])[k] || 0; return g[0] === g[1] ? g : g[0] > g[1] ? [b + 1, 0] : [0, b + 1]; }));
   const sel = (key, members, val) => `<select data-lu="${key}"><option value="">— pilih —</option>${members.map(n => `<option ${n === val ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>`;
   const types = E.rubberTypes(t);
   const sKey = i => { const n = types.slice(0, i + 1).filter(x => x === 'S').length; return n === 1 ? 's' : 's' + n; };
@@ -1273,9 +1276,10 @@ function viewMatch(t, mid) {
   const rubberHtml = (r, i) => {
     const rows = Array.from({ length: f.bo }, (_, k) => (src[i] || [])[k] || ['', '']);
     return `<div class="rubber">${team ? `<h3>${rubTitle(i)}</h3>${lineupHtml(i)}<div id="hc${i}">${hcText(E.handicapInfo(t, m.a, m.b, i, L), L)}</div>` : ''}
-      <div class="sets gpick">${rows.map((s, k) => `<div class="set"><span class="muted small">Game ${k + 1}</span>
+      <div class="sets gpick">${rows.map((s, k) => `<div class="set"><span class="muted small g-lab">Game ${k + 1}</span>
         <input type="hidden" data-r="${i}" data-i="${k}" data-s="0" value="${s[0]}"><input type="hidden" data-r="${i}" data-i="${k}" data-s="1" value="${s[1]}">
-        ${['a', 'b'].map((sd, j) => `<button type="button" class="gbtn ${s[0] !== '' && (s[0] > s[1]) === (j === 0) ? 'on' : ''}" data-g="${i}|${k}|${j}" ${edit || m.status !== 'done' ? '' : 'disabled'}>${colTag(m, sd, k + i)} ${esc((sd === 'a' ? A : B).name)}</button>`).join('')}</div>`).join('')}</div></div>`;
+        ${['a', 'b'].map((sd, j) => `<button type="button" class="gbtn ${s[0] !== '' && (s[0] > s[1]) === (j === 0) ? 'on' : ''}" data-g="${i}|${k}|${j}" ${edit || m.status !== 'done' ? '' : 'disabled'}>${colTag(m, sd, k + i)} <span>${esc((sd === 'a' ? A : B).name)}</span></button>`).join('')}
+        <label class="g-bk">Baki <select data-bk="${i}|${k}" ${edit || m.status !== 'done' ? '' : 'disabled'}>${['', 0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(v => `<option value="${v}" ${s[0] !== '' && v !== '' && Math.max(+s[0], +s[1]) - 1 === v && Math.max(+s[0], +s[1]) > 1 ? 'selected' : ''}>${v === '' ? '—' : v}</option>`).join('')}</select></label></div>`).join('')}</div></div>`;
   };
   const h = E.handicapInfo(t, m.a, m.b);
   $app.innerHTML = `
@@ -1349,7 +1353,8 @@ function viewMatch(t, mid) {
     const [ri, k, j] = b.dataset.g.split('|').map(Number);
     const inp = s2 => $app.querySelector(`[data-r="${ri}"][data-i="${k}"][data-s="${s2}"]`);
     const cur = inp(0).value !== '' && (+inp(0).value > +inp(1).value) === (j === 0);
-    inp(0).value = cur ? '' : j === 0 ? 1 : 0; inp(1).value = cur ? '' : j === 0 ? 0 : 1;
+    const bk = +(($app.querySelector(`[data-bk="${ri}|${k}"]`) || {}).value || 0);
+    inp(0).value = cur ? '' : j === 0 ? bk + 1 : 0; inp(1).value = cur ? '' : j === 0 ? 0 : bk + 1;
     // kosongkan game selepas pemenang ditentukan (terbaik 3: 2-0 → game 3 tidak dimainkan)
     let wa = 0, wb = 0; for (let g = 0; g < f.bo; g++) { const x = inp2(ri, g); if (wa >= Math.ceil(f.bo / 2) || wb >= Math.ceil(f.bo / 2)) { x[0].value = ''; x[1].value = ''; } else if (x[0].value !== '') (+x[0].value > +x[1].value ? wa++ : wb++); }
     $app.querySelectorAll(`[data-g^="${ri}|"]`).forEach(x => { const [, kk, jj] = x.dataset.g.split('|').map(Number), y = inp2(ri, kk); x.classList.toggle('on', y[0].value !== '' && (+y[0].value > +y[1].value) === (jj === 0)); });
@@ -1374,6 +1379,12 @@ function viewMatch(t, mid) {
   }
 
   const inp2 = (ri, g) => [0, 1].map(s2 => $app.querySelector(`[data-r="${ri}"][data-i="${g}"][data-s="${s2}"]`));
+  $app.querySelectorAll('[data-bk]').forEach(sel => (sel.onchange = () => {
+    const [ri, k] = sel.dataset.bk.split('|').map(Number), y = inp2(ri, k);
+    if (y[0].value !== '') { const b = +sel.value || 0; if (+y[0].value > +y[1].value) y[0].value = b + 1; else y[1].value = b + 1; }
+    if (m.status !== 'done') { ls.set(dkey, JSON.stringify(read())); pushLive(); }
+    upd();
+  }));
   $app.querySelectorAll('.sets input').forEach(i => (i.oninput = () => {
     if (m.status !== 'done') { ls.set(dkey, JSON.stringify(read())); document.getElementById('dmsg').innerHTML = '<span class="draft">✏️ Draf skor disimpan di telefon ini</span>'; }
     upd();
@@ -1445,10 +1456,10 @@ function standingsTable(t, g) {
   const q = t.format === 'group_ko' ? t.qualifyPerGroup : 1;
   const poolN = t.format === 'group_ko' ? (t.pool === '34' ? 2 : t.pool === '3' ? 1 : 0) : 0;
   const s = E.groupStandings(t, g.name), team = E.isTeam(t);
-  const sign = n => (n > 0 ? '+' : '') + n;
-  return `<div class="tw"><table><thead><tr><th>#</th><th class="l">${UNIT(t)}</th><th>P</th><th>M</th>${team ? '<th>S</th>' : ''}<th>K</th><th>Mata</th><th>Game ±</th></tr></thead>
+  const sign = n => (n > 0 ? '+' : '') + n, bk = s.some(r => r.bf || r.ba);
+  return `<div class="tw"><table><thead><tr><th>#</th><th class="l">${UNIT(t)}</th><th>P</th><th>M</th>${team ? '<th>S</th>' : ''}<th>K</th><th>Mata</th><th>Game ±</th>${bk ? '<th>Baki ±</th>' : ''}</tr></thead>
     <tbody>${s.map((r, i) => `<tr class="${i < q ? 'q' : i < q + poolN ? 'pq' : ''}"><td>${i + 1}</td><td class="l">${E.usesDraw(t) ? pnUnit(t, r.id) : pn(t, r.id)}</td>
-      <td>${r.p}</td><td>${r.w}</td>${team ? `<td>${r.d}</td>` : ''}<td>${r.l}</td><td><b>${r.pts}</b></td><td>${sign(r.sf - r.sa)}<div class="st-sub">${r.sf}-${r.sa}</div></td></tr>`).join('')}</tbody></table></div>`;
+      <td>${r.p}</td><td>${r.w}</td>${team ? `<td>${r.d}</td>` : ''}<td>${r.l}</td><td><b>${r.pts}</b></td><td>${sign(r.sf - r.sa)}<div class="st-sub">${r.sf}-${r.sa}</div></td>${bk ? `<td>${sign(r.bf - r.ba)}<div class="st-sub">${r.bf}-${r.ba}</div></td>` : ''}</tr>`).join('')}</tbody></table></div>`;
 }
 function matrixHtml(t, g, noCap, pts) {
   const M = E.matrix(t, g.name), st = E.groupStandings(t, g.name);
@@ -1746,7 +1757,8 @@ function rulesOf(t) {
     : t.tieFormat === 'SSD' ? `Pertemuan ${E.teamWord(t).toLowerCase()}: Single 1 + Single 2 + Double, ketiga-tiga dimainkan. Setiap ahli bermain sekali sahaja (dua pemain single, dua lagi double). Setiap perlawanan: menang 3 markah, seri (1-1) 1 markah, kalah 0. Pemenang pertemuan = jumlah markah tertinggi. ${t.tieRule === 'next' ? 'Jika markah sama: beza set, kemudian jumlah mata.' : 'Jika markah sama di peringkat kumpulan: seri.'} Kedudukan kumpulan: jumlah markah, kemudian beza set, kemudian bersemuka. Kalah mati: jika markah sama, penentu beza set, kemudian jumlah mata.`
     : `Pertemuan ${E.teamWord(t).toLowerCase()}: 1 perlawanan perseorangan + 1 perlawanan regu. Menang 2-0: 3 mata. Seri 1-1: 1 mata. Kalah: 0 mata.`);
   rules.push('Warna buah: app mengundi pihak yang bermain ⚪ Putih/Coklat dan ⚫ Hitam bagi setiap perlawanan (dipapar dalam jadual). Jika terbaik 3 game, warna bertukar setiap game. Putih/Coklat memulakan game.', 'Keputusan sahaja direkod: siapa menang setiap game. Tiada skor mata.');
-  if (!E.isMixer(t)) rules.push('Jika mata sama, susunan ditentukan mengikut turutan: (1) beza menang-kalah bilangan perlawanan, (2) beza menang-kalah bilangan game, (3) keputusan bersemuka (pertemuan sesama peserta yang masih sama; jika tiga atau lebih, bilangan kemenangan sesama mereka). Contoh: 5-2 (+3).');
+  if (!E.isMixer(t)) rules.push(`Kiraan game: ${setRuleTxt(t)}.`);
+  if (!E.isMixer(t)) rules.push('Jika mata sama, susunan ditentukan mengikut turutan: (1) beza menang-kalah bilangan perlawanan, (2) beza menang-kalah bilangan game, (3) baki ± = jumlah baki ketika menang − jumlah baki ketika kalah (baki = buah lawan yang masih tinggal bila game tamat), (4) keputusan bersemuka (pertemuan sesama peserta yang masih sama; jika tiga atau lebih, bilangan kemenangan sesama mereka). Contoh: 5-2 (+3).');
   const HS = E.HC_SCHEMES[t.hcMode];
   if (t.drawLv && (t.entryMode === 'double_draw' || E.isTeam(t))) rules.push(`Undian ${E.isTeam(t) ? E.teamWord(t).toLowerCase() : 'regu'} diimbangkan ikut tahap: pemain disusun ikut tahap dan dibahagi kepada pot; pot kuat diundi dahulu, kemudian setiap pot seterusnya diberi kepada ${E.isTeam(t) ? E.teamWord(t).toLowerCase() : 'regu'} yang jumlah tahapnya paling rendah (cth. Naga + Helang, Singa + Rimau).`);
   if (t.hcMode === 'manual') rules.push(hcTypeOf(t) === 'buah' ? 'Handicap: angka dalam kurungan (0–10) ialah nilai handicap peserta. Pihak dengan angka lebih rendah menerima kelebihan sebanyak beza angka kedua-dua pihak (maks. 9): bilangan buahnya sendiri yang dikeluarkan dari papan sebelum setiap game bermula.' : 'Handicap: angka dalam kurungan (0–10) ialah nilai handicap peserta. Kelebihan diberi kepada pihak dengan angka lebih rendah mengikut peraturan penganjur.');
@@ -1767,7 +1779,7 @@ function guideHtml(t) {
         <div><span class="pg-dot" style="background:#f4b400"></span><span><b>Bersedia</b>: anda seterusnya selepas perlawanan semasa</span></div>
         <div><span class="pg-dot" style="background:#94a3b8"></span><span><b>Menunggu / rehat</b>: dipaparkan berapa perlawanan lagi</span></div></div>`)}
     ${sec('🔔', 'Hidupkan notifikasi', '<p>Tekan 🔔 selepas pilih nama. Telefon akan berbunyi bila anda perlu bermain atau menjadi pengadil, beserta nombor papan.</p>')}
-    ${sec('🎯', 'Jika anda pengadil', `<p class="muted small" style="margin:0 0 4px">Pengadil: ${reporter}.</p>${steps(['Tab 🟢 Langsung → tekan <b>📝 Isi keputusan</b> pada papan anda', 'Masukkan nama anda dan <b>PIN acara</b> dari penganjur (sekali sahaja)',
+    ${sec('🎯', 'Jika anda pengadil', `<p class="muted small" style="margin:0 0 4px">Pengadil: ${reporter}.</p>${steps(['Tab 🟢 Langsung → tekan <b>🎯 Jaga skor</b> pada papan anda', 'Masukkan nama anda dan <b>PIN acara</b> dari penganjur (sekali sahaja)',
       ...(team && t.handicap ? ['Pilih pemain bagi setiap perlawanan <b>sebelum</b> mula, supaya handicap dikira'] : []),
       'Semak warna buah setiap pihak (⚪ Putih/Coklat, ⚫ Hitam) yang dipapar pada perlawanan', 'Selepas tamat, tekan nama pemenang setiap game → <b>📤 Hantar keputusan</b>'])}`)}
     ${sec('📝', 'Isi dari tab Keputusan', steps(['Tab 📝 <b>Keputusan</b> → ketik perlawanan bertanda 🟢', 'Tekan nama pemenang setiap game (disimpan sebagai draf di telefon)', 'Masukkan <b>PIN acara</b> → tekan <b>📤 Hantar keputusan</b>']))}
@@ -1832,7 +1844,7 @@ function pinMessage(t, pin) {
     '👤 *1. Kenal pasti diri anda*', 'Buka tab 🟢 *Langsung* → tekan *👤 Saya* → pilih nama anda. Telefon akan ingat pilihan ini (jika anda mendaftar melalui portal, nama dikesan sendiri).',
     'Status anda akan dipaparkan di atas skrin:', '🔴 *Bermain sekarang*: terus ke papan yang dinyatakan', '🟣 *Pengadil*: pergi ke papan itu dan isi keputusan', '🟡 *Bersedia*: anda seterusnya selepas perlawanan semasa', '⏳ *Menunggu / rehat*: dipaparkan berapa perlawanan lagi', '',
     '🔔 *2. Hidupkan notifikasi*', 'Tekan 🔔 selepas pilih nama. Telefon akan berbunyi bila anda perlu bermain atau menjadi pengadil, beserta nombor papan.', '',
-    '🎯 *3. Jika anda pengadil*', '• Tab Langsung → tekan *📝 Isi keputusan* pada papan anda', `• Masukkan nama anda dan *PIN acara: ${pin}*`,
+    '🎯 *3. Jika anda pengadil*', '• Tab Langsung → tekan *🎯 Jaga skor* pada papan anda (atau imbas QR papan)', `• Masukkan nama anda dan *PIN acara: ${pin}*`,
     ...(team && t.handicap ? ['• Pilih pemain bagi setiap perlawanan *sebelum* mula (supaya handicap dikira)'] : []),
     '• Tekan nama pemain untuk +1 mata. Set tamat sendiri.', '• Bila perlawanan tamat, skor dihantar automatik kepada penganjur.', '',
     '📌 Papan tidak tetap. Jika papan lain kosong lebih awal, perlawanan anda mungkin dipindah. Sentiasa semak tab Langsung.',
@@ -2268,7 +2280,7 @@ const GUIDE = {
   langsung: {
     penonton: ['Tab 🟢 Langsung menunjukkan perlawanan di setiap papan dan warna buah (⚪ Putih/Coklat, ⚫ Hitam).', 'Keputusan dikemas kini selepas disahkan penganjur.', '<b>📺 Mod TV</b> untuk skrin besar di dewan.'],
     peserta: ['Pilih nama anda di <b>👤 Saya</b>, kemudian tekan 🔔.', 'Notifikasi: 🟡 sila bersedia · 🔴 bermain sekarang · 🟣 anda pengadil, beserta nombor papan.', 'Papan tidak tetap: perlawanan diberi ke papan yang kosong dahulu.'],
-    pengadil: ['Tekan <b>📝 Isi keputusan</b> pada papan anda (tab Langsung) atau ketik perlawanan di tab 📝 Keputusan.', 'Masukkan <b>PIN acara</b> sekali sahaja.', 'Tekan nama pemenang setiap game, kemudian <b>📤 Hantar keputusan</b>.', BEZA],
+    pengadil: ['Tekan <b>🎯 Jaga skor</b> pada papan anda (tab Langsung) atau imbas QR papan. Tekan panel regu setiap kali satu buahnya masuk; atau guna 🏁 Tamatkan game untuk masukkan pemenang &amp; baki.', 'Masukkan <b>PIN acara</b> sekali sahaja.', 'Tekan nama pemenang setiap game, kemudian <b>📤 Hantar keputusan</b>.', BEZA],
     pengesah: ['Sama seperti pengadil, tetapi keputusan yang anda simpan terus rasmi (<b>Simpan keputusan</b>).', BEZA],
     penganjur: ['<b>▶️ Agih papan kosong</b> untuk memulakan; papan seterusnya diagih sendiri bila skor disimpan.', '<b>⏸️</b> tangguh perlawanan (contoh pemain belum sampai).', '🎯 nama penjaga dan <b>🔓 Lepaskan</b> pada setiap papan.', 'Tetapan papan di bahagian bawah; <b>📺 Mod TV</b> untuk skrin besar.', BEZA],
   },
@@ -2369,7 +2381,7 @@ const appUrl = h => `${location.origin}${location.pathname}#/${h}`;
 function gotoTable(t, k) {
   const { occ, xr } = LV.liveState(t), m = occ[k];
   ls.set('carrom:scoremode:' + t.id, '1');
-  if (m) location.replace(`#/t/${t.id}/m/${m.id}`);
+  if (m) location.replace(`#/t/${t.id}/ls/${m.id}${xr[k] != null ? '~' + xr[k] : ''}`);
   else { location.replace(`#/t/${t.id}/langsung`); setTimeout(() => toast(`Papan ${k}: tiada perlawanan sekarang. Tunggu agihan seterusnya.`, 4000), 300); }
 }
 function viewQR(t) {
@@ -2614,6 +2626,8 @@ function liveOf(t, m, id = m.id) {
 // Pertandingan di telefon ini sahaja: pilihan pemenang game (draf) dipapar terus di Langsung & Mod TV
 function draftLive(t, m) {
   if (!m || m.status === 'done') return null;
+  let S = null; try { S = JSON.parse(ls.get('carrom:ls:' + m.id) || 'null'); } catch {}
+  if (S && Array.isArray(S.rs)) return { rs: S.rs, ri: S.ri || 0, cur: S.cur || [0, 0], at: Date.now(), by: '', sw: !!S.swap };
   let d = null; try { d = JSON.parse(ls.get('carrom:draft:' + m.id) || 'null'); } catch {}
   if (!Array.isArray(d)) return null;
   const rs = d.map(sets => (sets || []).filter(s => s[0] !== '' && s[1] !== '').map(x => x.map(Number)));
@@ -2647,18 +2661,21 @@ function boardRow(t, m, x, q) {
   const team = E.isTeam(t), f = E.fmtFor(t, m.stage), ri = x ? x.ri || 0 : 0, g = x ? x.rs[ri] || [] : [];
   const gk = Math.min(g.length, f.bo - 1) + (team ? ri : 0), fin = x && liveDone(t, m, x);
   const r = fin ? E.evaluateMatch(t, { ...m, rubbers: x.rs.map(sets => ({ sets })) }) : null;
-  const big = fin ? (team ? (t.tieFormat === 'SSD' ? [r.ma, r.mb] : [r.ra, r.rb]) : [r.sa, r.sb]) : [g.filter(s => s[0] > s[1]).length, g.filter(s => s[1] > s[0]).length];
+  const gw = [g.filter(s => s[0] > s[1]).length, g.filter(s => s[1] > s[0]).length];
+  const coins = !fin && x && x.cur && (x.cur[0] || x.cur[1]);   // Jaga skor: buah tinggal game semasa
+  const big = fin ? (team ? (t.tieFormat === 'SSD' ? [r.ma, r.mb] : [r.ra, r.rb]) : [r.sa, r.sb]) : coins ? x.cur.slice(0, 2) : gw;
+  const gwTxt = k => coins ? `<small class="b3-gw">buah tinggal · menang <b>${gw[k]}</b></small>` : '';
   const side = (sd, k) => {
     const id = k ? m.b : m.a, col = E.colourOf(m, sd, gk), brk = E.whiteSide(m, gk) === sd;
     const tag = fin ? (r.winner === id ? '🏆 <b>MENANG</b>' : '&nbsp;') : `${CDOT[col]} ${col === 'w' ? 'Putih' : 'Hitam'}${brk ? '<br><b>pukul dahulu</b>' : ''}`;
-    return `<div class="b3-s ${sd}"><span class="b3-nm">${esc(E.pname(t, id))}</span><span class="b3-pt">${big[k]}</span><span class="b3-tag">${tag}</span></div>`;
+    return `<div class="b3-s ${sd}"><span class="b3-nm">${esc(E.pname(t, id))}</span><span class="b3-pt">${big[k]}</span>${gwTxt(k)}<span class="b3-tag">${tag}</span></div>`;
   };
   const coin = sd => `<i class="b3-coin ${E.colourOf(m, sd, gk)} ${sd}"></i>`;
   const brd = (cn) => `<div class="b3-b"><i class="pk p1"></i><i class="pk p2"></i><i class="pk p3"></i><i class="pk p4"></i><div class="b3-p"><i class="bl l"></i><i class="bl r"></i><i class="bl t"></i><i class="bl b"></i><i class="b3-c"></i>${cn}</div></div>`;
   if (q) {
     const ca = E.colourOf(m, 'a', gk), cb = E.colourOf(m, 'b', gk), wa = E.whiteSide(m, gk);
     const nm = (n, c, pos, brk) => `<div class="q-n ${pos}"><span><i class="q-coin ${c}"></i>${esc(n)}</span>${brk && !fin ? '<small>pukul dahulu</small>' : ''}</div>`;
-    const sc = (k, c) => `<div class="q-sc ${k ? 'b' : 'a'}${fin && r.winner === (k ? m.b : m.a) ? ' win' : ''}"><i class="q-coin ${c}"></i><span>${esc(E.pname(t, k ? m.b : m.a))}${fin && r.winner === (k ? m.b : m.a) ? ' 🏆' : ''}</span><b>${big[k]}</b></div>`;
+    const sc = (k, c) => `<div class="q-sc ${k ? 'b' : 'a'}${fin && r.winner === (k ? m.b : m.a) ? ' win' : ''}"><i class="q-coin ${c}"></i><span>${esc(E.pname(t, k ? m.b : m.a))}${fin && r.winner === (k ? m.b : m.a) ? ' 🏆' : ''}${coins ? `<br><small class="b3-gw">buah tinggal · menang <b>${gw[k]}</b></small>` : ''}</span><b>${big[k]}</b></div>`;
     const cn = fin ? '' : `<i class="b3-coin ${ca} qa"></i><i class="b3-coin ${cb} qb"></i>`;
     return `${sc(0, ca)}<div class="q-g">${nm(q[0][1], ca, 't')}${nm(q[1][0], cb, 'l', wa === 'b')}${brd(cn)}${nm(q[1][1], cb, 'r')}${nm(q[0][0], ca, 'bt', wa === 'a')}</div>${sc(1, cb)}`;
   }
@@ -2711,8 +2728,9 @@ function buzz(n = 1) {
 const gameOver = (t, a, b, nb = 0) => a >= E.setPointsOf(t) || b >= E.setPointsOf(t) || (!!E.maxBoardsOf(t) && nb >= E.maxBoardsOf(t) && a !== b);
 let _lsPad = null;   // sisi yang sedang memilih mata board
 function lsStart(t, m, ri) {
-  const h = E.handicapInfo(t, m.a, m.b, ri, m.lineup || null);
-  return h && h.n && !h.pending && !h.missing ? (h.to === m.a ? [h.n, 0] : [0, h.n]) : [0, 0];
+  // 9 buah setiap regu; handicap "buah dikeluarkan dahulu": penerima mula dengan kurang buah
+  const h = E.handicapInfo(t, m.a, m.b, ri, m.lineup || null), n = h && h.n && !h.pending && !h.missing && hcTypeOf(t) === 'buah' ? Math.min(8, h.n) : 0;
+  return n ? (h.to === m.a ? [9 - n, 9] : [9, 9 - n]) : [9, 9];
 }
 function lsRubberDone(t, m, sets) {
   const f = E.fmtFor(t, m.stage), need = f.full ? f.bo : Math.ceil(f.bo / 2);
@@ -2798,24 +2816,27 @@ function viewLiveScore(t, mid0) {
       else toast('Skor langsung tidak dapat dihantar: ' + (err.code || err.message), 3500);
     }), 400);   // himpun tekanan pantas (−1, undur) menjadi satu tulisan
   };
-  const point = (k, d) => {
-    if (d > 0 && allDone()) return;
+  // ---- Kiraan buah (KSAS): setiap regu mula 9 buah warnanya; habis dahulu = menang game; baki = buah lawan yang tinggal ----
+  // Game tamat disimpan sebagai [baki+1, 0] / [0, baki+1] (enjin menukar kepada pemenang + m.rubbers[i].gb)
+  const gIdx = () => (S.rs[S.ri] || []).length + (E.isTeam(t) ? S.ri : 0);
+  const endGame = (k, baki) => {
     H.push(JSON.stringify(S)); if (H.length > 200) H.shift();
-    S.cur[k] = Math.max(0, S.cur[k] + d);
-    if (d > 0) S.nb = (S.nb || 0) + 1;   // satu board dimenangi
-    if (d > 0 && gameOver(t, ...S.cur, S.nb)) {
-      S.rs[S.ri].push([...S.cur]);
-      const g = S.rs[S.ri].length;
-      if (lsRubberDone(t, m, S.rs[S.ri])) {
-        const nxt = S.rs.findIndex((s, i) => !away(i) && !lsRubberDone(t, m, s));
-        if (nxt >= 0) { S.ri = nxt; toast(`${E.rubberLabel(t, S.ri - 1) || ''} tamat. Seterusnya: ${E.rubberLabel(t, S.ri)}`, 3000); }
-        else toast('🏁 Perlawanan tamat', 2500);
-      } else toast(`Set ${g} tamat · ${S.cur[0]}–${S.cur[1]}`, 1800);
-      S.cur = allDone() ? [0, 0] : lsStart(t, m, S.ri); S.nb = 0;
-    }
-    buzz(d > 0 ? 1 : 2);
-    const setEnd = d > 0 && JSON.parse(H[H.length - 1]).rs.flat().length !== S.rs.flat().length;
-    tick(d < 0 ? 'down' : setEnd ? 'set' : 'up');
+    const b = Math.max(0, Math.min(9, baki | 0));
+    S.rs[S.ri].push(k ? [0, b + 1] : [b + 1, 0]); S.pend = null;
+    const g = S.rs[S.ri].length;
+    if (lsRubberDone(t, m, S.rs[S.ri])) {
+      const nxt = S.rs.findIndex((x, i) => !away(i) && !lsRubberDone(t, m, x));
+      if (nxt >= 0) { S.ri = nxt; toast(`Seterusnya: ${E.rubberLabel(t, S.ri)}`, 3000); } else toast('🏁 Perlawanan tamat', 2500);
+    } else toast(`🏁 Game ${g} dimenangi ${k ? B : A} · baki ${b}`, 2200);
+    S.cur = allDone() ? [0, 0] : lsStart(t, m, S.ri);
+    buzz(2); tick('set'); push(); draw();
+  };
+  const point = (k, d) => {
+    if (allDone() || S.pend) return;
+    H.push(JSON.stringify(S)); if (H.length > 200) H.shift();
+    S.cur[k] = Math.max(0, Math.min(9, S.cur[k] + d));
+    if (S.cur[k] === 0) S.pend = { k, b: S.cur[1 - k] };   // semua buah regu ini masuk → sahkan
+    buzz(d < 0 ? 1 : 2); tick(d < 0 ? 'up' : 'down');
     push(); draw();
     const el = $app.querySelector(`.sb-side.s${k}`); if (el) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
   };
@@ -2823,48 +2844,55 @@ function viewLiveScore(t, mid0) {
 
   const draw = () => {
     const sets = S.rs[S.ri] || [], wa = sets.filter(s => s[0] > s[1]).length, wb = sets.filter(s => s[1] > s[0]).length;
-    const h = E.handicapInfo(t, m.a, m.b, S.ri, m.lineup || null), done = allDone();
-    const r = done ? E.evaluateMatch(t, { ...m, rubbers: S.rs.map((sets, i) => ({ sets: away(i) ? (m.rubbers[i] || {}).sets || [] : sets })) }) : null, part = done && (split || pendAway().length);
-    const side = (k, nm) => `<button type="button" class="sb-side s${k}" data-pt="${k}" ${done ? 'disabled' : ''}>
-        <div class="sb-nm">${esc(nm)}</div><div class="sb-pt">${S.cur[k]}</div><div class="sb-g">Set menang <b>${k ? wb : wa}</b></div></button>`;
+    const h = E.handicapInfo(t, m.a, m.b, S.ri, m.lineup || null), done = allDone(), gk = gIdx(), f = E.fmtFor(t, m.stage);
+    const r = done ? E.evaluateMatch(t, { ...m, rubbers: S.rs.map((sets, i) => ({ sets: away(i) ? (m.rubbers[i] || {}).sets || [] : sets.map(g => (g[0] > g[1] ? [1, 0] : [0, 1])) })) }) : null, part = done && (split || pendAway().length);
+    const side = (k, nm) => { const sd = k ? 'b' : 'a', col = E.colourOf(m, sd, gk), brk = E.whiteSide(m, gk) === sd;
+      return `<button type="button" class="sb-side s${k} col-${col}${brk ? ' brk' : ''}" data-pt="${k}" ${done || S.pend ? 'disabled' : ''}>
+        ${brk && !done ? '<span class="sb-brk">PUKUL DAHULU</span>' : ''}<div class="sb-nm">${esc(nm)}</div>
+        <div class="sb-coin"><i class="q-coin ${col}"></i> ${col === 'w' ? 'Putih' : 'Hitam'}</div>
+        <div class="sb-pt">${done ? (k ? wb : wa) : S.cur[k]}</div><div class="sb-g">${done ? 'game menang' : `buah tinggal · Game menang <b>${k ? wb : wa}</b>`}</div></button>`; };
+    const hist = S.rs.map((sets, i) => sets.length ? `<div>${E.isTeam(t) ? `<small>${esc(E.rubberLabel(t, i))}</small> ` : ''}${sets.map((g, j) => `<span class="${g[0] > g[1] ? 'wa' : 'wb'}">G${j + 1}: ${esc(g[0] > g[1] ? A : B)} · baki ${Math.max(g[0], g[1]) - 1}</span>`).join('')}</div>` : '').join('');
     $app.innerHTML = `${back}${eyebrow}${takeNote}
       ${E.isTeam(t) ? `<div class="sb-tabs">${m.rubbers.map((_, i) => away(i) ? (split ? '' : `<span class="pill-btn small light" style="opacity:.6">${esc(E.rubberLabel(t, i))} ${savedDone(i) ? '✓' : `📍 Papan ${esc(m.xt[i])}`}</span>`) : `<button type="button" class="pill-btn small ${i === S.ri ? 'brand' : 'light'}" data-ri="${i}">${esc(E.rubberLabel(t, i))}${lsRubberDone(t, m, S.rs[i]) ? ' ✓' : ''}</button>`).join('')}</div>` : ''}
       ${luPick()}
-      ${done ? '' : `<div class="sb-set">SET ${sets.length + 1} · BOARD ${(S.nb || 0) + 1}${E.maxBoardsOf(t) ? ((S.nb || 0) >= E.maxBoardsOf(t) ? ' (TAMBAHAN)' : '/' + E.maxBoardsOf(t)) : ''} · sasaran ${E.setPointsOf(t)}</div>`}
+      ${done ? '' : `<div class="sb-set">GAME ${sets.length + 1}${f.bo > 1 ? '/' + f.bo : ''} · ${esc(E.whiteSide(m, gk) === 'a' ? A : B)} pukul dahulu</div>`}
       <div class="sb${S.swap ? ' sw' : ''}">${side(0, A)}${side(1, B)}</div>
-      ${_lsPad != null && !done ? `<div class="card sb-pad"><div class="small" style="margin-bottom:8px">Board ${(S.nb || 0) + 1} dimenangi <b>${esc(_lsPad ? B : A)}</b> — berapa mata?</div>
-        <div class="sb-padg">${Array.from({ length: 13 }, (_, i) => `<button type="button" class="pill-btn ${i === 12 ? 'light' : 'brand'} small" data-bp="${i + 1}">${i + 1}</button>`).join('')}</div>
-        <p class="muted small" style="margin:6px 0 0">Mata board = buah lawan yang tinggal di papan (+ ratu jika dimasukkan &amp; ditutup).</p>
-        <button type="button" class="pill-btn light small" id="sbPadX" style="margin-top:8px">Batal</button></div>` : ''}
-      <div class="sb-ctl"><button type="button" class="pill-btn light small" data-mn="${S.swap ? 1 : 0}">−1</button>
+      ${S.pend && !done ? `<div class="card sb-pad"><div class="section-title" style="margin-top:0">🏁 Game ${sets.length + 1} dimenangi ${esc(S.pend.k ? B : A)} · baki ${S.pend.b}</div>
+        <div class="row" style="gap:8px"><button type="button" class="pill-btn brand" id="sbOk"><span class="dot"></span>✅ Sahkan</button><button type="button" class="pill-btn light" id="sbNo">↶ Undur</button></div></div>` : ''}
+      ${done ? '' : `<div class="sb-ctl"><button type="button" class="pill-btn light small" data-mn="${S.swap ? 1 : 0}">+1</button>
         <button type="button" class="pill-btn light small" id="sbUndo" ${H.length ? '' : 'disabled'}>↶ Undur</button>
         <button type="button" class="pill-btn light small" id="sbSwap">⇄ Tukar sisi</button>
-        <button type="button" class="pill-btn light small" data-mn="${S.swap ? 0 : 1}">−1</button></div>
-      <div class="sb-games">${S.rs.map((sets, i) => sets.length ? `<div>${E.isTeam(t) ? `<small>${esc(E.rubberLabel(t, i))}</small> ` : ''}${sets.map((g, j) => `<span class="${g[0] > g[1] ? 'wa' : 'wb'}">Set ${j + 1}: ${g[0]}–${g[1]}</span>`).join('')}</div>` : '').join('') || '<span class="muted small">Set 1 sedang dimainkan.</span>'}</div>
-      ${h && h.n && !h.pending && !h.missing ? `<p class="hc-r">Handicap: <b>${esc(E.pname(t, h.to))}</b> mula ${h.n}-0 setiap set</p>` : h && (h.pending || h.missing) ? '<p class="hc-r warn">Handicap belum dapat dikira (pemain/tahap belum ditetapkan). Mula dari 0-0.</p>' : ''}
+        <button type="button" class="pill-btn light small" data-mn="${S.swap ? 0 : 1}">+1</button></div>
+      <details class="card soft sb-quick" ${S.pend ? '' : (S.cur[0] === lsStart(t, m, S.ri)[0] && S.cur[1] === lsStart(t, m, S.ri)[1] ? 'open' : '')}><summary>🏁 Tamatkan game (pilih pemenang &amp; baki)</summary>
+        <p class="muted small" style="margin:4px 0 8px">Guna jika tidak menekan setiap buah, atau kes istimewa (kesalahan / menyerah).</p>
+        <div class="grid2"><div><label style="margin-top:0">Pemenang game ${sets.length + 1}</label><select id="qW"><option value="">— pilih —</option><option value="0">${esc(A)}</option><option value="1">${esc(B)}</option></select></div>
+        <div><label style="margin-top:0">Baki (buah lawan tinggal)</label><select id="qB">${Array.from({ length: 10 }, (_, i) => `<option value="${i}">${i}</option>`).join('')}</select></div></div>
+        <button type="button" class="pill-btn orange small" id="qGo" style="margin-top:8px">✅ Rekod game</button></details>`}
+      <div class="sb-games">${hist}</div>
+      ${h && h.n && !h.pending && !h.missing ? `<p class="hc-r">⚖️ ${esc(hcLine(t, E.pname(t, h.to), h.n))}</p>` : h && (h.pending || h.missing) ? '<p class="hc-r warn">Handicap belum dapat dikira (pemain/tahap belum ditetapkan).</p>' : ''}
       ${done ? `<div class="card sb-end"><div class="section-title" style="margin-top:0">🏁 Perlawanan tamat</div>
-        <p>${part ? `${split ? `<b>${esc(E.rubberLabel(t, only))}</b> tamat.` : 'Perlawanan di papan ini tamat.'} ${pendAway().filter(i => !split || i !== only).length ? `Masih berjalan: ${pendAway().filter(i => i !== only).map(i => `${esc(E.rubberLabel(t, i))} (Papan ${esc(m.xt && m.xt[i] != null ? m.xt[i] : m.lt)})`).join(', ')}.` : ''} Keputusan pertemuan dikira bila semua tamat.` : r && r.winner ? `Pemenang: <b>${esc(E.pname(t, r.winner))}</b>` : r && r.draw ? '<b>Seri</b>' : 'Keputusan perlu ditentukan penganjur'}</p>
+        <p>${part ? `${split ? `<b>${esc(E.rubberLabel(t, only))}</b> tamat.` : 'Perlawanan di papan ini tamat.'}` : `Pemenang: <b>${esc(r && r.winner ? E.pname(t, r.winner) : '—')}</b> (${E.tieScore(t, r).join('–')})`}</p>
         <button class="pill-btn ${edit ? 'brand' : 'orange'}" id="sbFin"><span class="dot"></span>${edit ? '✅ Simpan keputusan' : '📤 Hantar kepada penganjur'}</button>
-        ${t.liveAuto !== false && !_lsAutoOff[lid] ? `<p class="small" id="sbAutoTx" style="margin:8px 0 0">⏳ ${edit ? 'Disimpan' : 'Dihantar'} automatik dalam <b id="sbCd">8</b> saat… <button type="button" class="pill-btn light small" id="sbAutoNo">Tunggu, saya semak dulu</button></p>` : ''}</div>` : ''}
-      <div class="row" style="margin-top:12px;gap:8px"><button type="button" class="pill-btn light small" id="sbStop">⏹️ Henti skor langsung</button><button type="button" class="pill-btn light small" id="sbSnd">${ls.get('carrom:lsSound') === '0' ? '🔇 Bunyi: tutup' : '🔊 Bunyi: buka'}</button><button type="button" class="pill-btn light small" id="sbVib">Getaran: ${VIB[vibMode()][0]}</button></div>
-      <p class="muted small">Selepas setiap board, tekan nama pemenang board dan pilih mata board itu. <b>−1</b> tolak satu mata (pembetulan). <b>↶ Undur</b> batalkan tindakan terakhir, termasuk set yang baru tamat. ${esc(setRuleTxt(t))}. Skrin tidak akan padam semasa halaman ini dibuka. Penonton nampak skor ini di tab Langsung dan Mod TV.</p>`;
-    $app.querySelectorAll('[data-pt]').forEach(b => (b.onclick = () => { _lsPad = +b.dataset.pt; draw(); const pd = $app.querySelector('.sb-pad'); if (pd) pd.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }));
-    $app.querySelectorAll('[data-bp]').forEach(b => (b.onclick = () => { const k = _lsPad; _lsPad = null; if (k != null) point(k, +b.dataset.bp); }));
-    { const x = document.getElementById('sbPadX'); if (x) x.onclick = () => { _lsPad = null; draw(); }; }
-    $app.querySelectorAll('[data-mn]').forEach(b => (b.onclick = () => point(+b.dataset.mn, -1)));
+        ${t.liveAuto !== false && !_lsAutoOff[lid] ? `<p class="small" id="sbAutoTx" style="margin:8px 0 0">⏳ ${edit ? 'Disimpan' : 'Dihantar'} automatik dalam <b id="sbCd">8</b> saat… <button type="button" class="pill-btn light small" id="sbAutoNo">Tunggu</button></p>` : ''}</div>` : ''}
+      <div class="row" style="margin-top:12px;gap:8px"><button type="button" class="pill-btn light small" id="sbStop">⏹️ Henti skor langsung</button><button type="button" class="pill-btn light small" id="sbSnd">${ls.get('carrom:lsSound') === '0' ? '🔇 Bunyi' : '🔊 Bunyi'}</button><button type="button" class="pill-btn light small" id="sbVib">📳 ${vibMode() === 'off' ? 'Tiada' : vibMode() === 'strong' ? 'Kuat' : 'Lembut'}</button></div>
+      <p class="muted small">Tekan panel regu setiap kali <b>satu buah warnanya masuk</b> (angka turun 9 → 0). Regu yang habiskan buahnya dahulu menang game; <b>baki</b> = buah lawan yang masih tinggal. <b>+1</b> pulangkan satu buah (pembetulan). <b>↶ Undur</b> batalkan tindakan terakhir. Warna bertukar setiap game. Skrin tidak akan malap semasa menjaga skor.</p>`;
+    $app.querySelectorAll('[data-pt]').forEach(b => (b.onclick = () => point(+b.dataset.pt, -1)));
+    $app.querySelectorAll('[data-mn]').forEach(b => (b.onclick = () => point(+b.dataset.mn, +1)));
+    { const ok = document.getElementById('sbOk'); if (ok) ok.onclick = () => { const p = S.pend; S.pend = null; H.pop(); endGame(p.k, p.b); }; }
+    { const no = document.getElementById('sbNo'); if (no) no.onclick = () => { if (H.length) S = JSON.parse(H.pop()); S.pend = null; push(); draw(); }; }
+    { const q = document.getElementById('qGo'); if (q) q.onclick = () => { const w = document.getElementById('qW').value; if (w === '') return toast('Pilih pemenang game'); endGame(+w, +document.getElementById('qB').value); }; }
     $app.querySelectorAll('[data-lsu]').forEach(sl => (sl.onchange = () => {
       const before = lsStart(t, m, S.ri);
       m.lineup = { ...(m.lineup || {}), [sl.dataset.lsu]: sl.value }; S.lu = { ...(S.lu || {}), [sl.dataset.lsu]: sl.value };
-      // set semasa belum bermula (masih pada mata mula lama) → guna mata mula handicap baharu
       if (S.cur[0] === before[0] && S.cur[1] === before[1]) S.cur = lsStart(t, m, S.ri);
       if (edit) { const tm = t.matches.find(x => x.id === m.id); if (tm) { tm.lineup = { ...m.lineup }; save(t); } }
       push(); draw();
     }));
-    $app.querySelectorAll('[data-ri]').forEach(b => (b.onclick = () => { H.push(JSON.stringify(S)); S.ri = +b.dataset.ri; S.cur = lsStart(t, m, S.ri); push(); draw(); }));
-    document.getElementById('sbUndo').onclick = () => { if (!H.length) return; S = JSON.parse(H.pop()); push(); draw(); };
+    $app.querySelectorAll('[data-ri]').forEach(b => (b.onclick = () => { H.push(JSON.stringify(S)); S.ri = +b.dataset.ri; S.cur = lsStart(t, m, S.ri); S.pend = null; push(); draw(); }));
+    { const u = document.getElementById('sbUndo'); if (u) u.onclick = () => { if (!H.length) return; S = JSON.parse(H.pop()); push(); draw(); }; }
     document.getElementById('sbSnd').onclick = () => { ls.set('carrom:lsSound', ls.get('carrom:lsSound') === '0' ? null : '0'); tick('up'); draw(); };
     document.getElementById('sbVib').onclick = () => { const order = ['soft', 'strong', 'off']; ls.set('carrom:lsVib', order[(order.indexOf(vibMode()) + 1) % 3]); buzz(); draw(); };
-    document.getElementById('sbSwap').onclick = () => { S.swap = !S.swap; push(); draw(); };
+    { const sw = document.getElementById('sbSwap'); if (sw) sw.onclick = () => { S.swap = !S.swap; push(); draw(); }; }
     document.getElementById('sbStop').onclick = async () => {
       if (!confirm('Henti skor langsung untuk perlawanan ini? Skor di telefon ini akan dipadam.')) return;
       ls.set(key, null); delete _lsHist[lid]; clearTimeout(_lsTimer);
@@ -2927,7 +2955,7 @@ function viewLive(t) {
       ${m ? `${boardHtml(t, m, x, '', `#/t/${t.id}/m/${m.id}`)}
         ${x && edit && store.isCloud(t.id) ? `<div class="lv-by2">🎯 Dijaga oleh <b>${esc(x.by || 'tanpa nama')}</b><button type="button" class="pill-btn small light" data-rel="${lid}">🔓 Lepaskan</button></div>` : ''}
         ${u ? `<div class="tt-u">🟣 Pengadil: <b>${esc(E.pname(t, u))}</b></div>` : ''}
-        ${scoreMode(t) || iUmp ? `<div class="row tt-act"><a class="pill-btn small orange" href="#/t/${t.id}/m/${m.id}">📝 Isi keputusan</a>${edit && ri == null ? `<button class="pill-btn small light" data-tgh="${m.id}" title="Tangguh">⏸️ Tangguh</button>` : ''}</div>` : ''}`
+        ${scoreMode(t) || iUmp ? `<div class="row tt-act"><a class="pill-btn small orange" href="#/t/${t.id}/ls/${lid}">🎯 Jaga skor</a><a class="pill-btn small light" href="#/t/${t.id}/m/${m.id}">📝 Isi keputusan</a>${edit && ri == null ? `<button class="pill-btn small light" data-tgh="${m.id}" title="Tangguh">⏸️ Tangguh</button>` : ''}</div>` : ''}`
       : '<div class="b3 empty"><div class="b3-s"></div><div class="b3-b"><i class="pk p1"></i><i class="pk p2"></i><i class="pk p3"></i><i class="pk p4"></i><div class="b3-p"><i class="b3-c"></i></div></div><div class="b3-s"></div></div><p class="muted small" style="text-align:center;margin:4px 0 0">Papan kosong</p>'}
       ${nx[k] ? `<div class="tt-n">⏭️ Bersedia: ${vsTxt(t, nx[k])}</div>` : ''}</div>`;
   };
@@ -2958,7 +2986,7 @@ function viewLive(t) {
     toast('🔓 Dilepaskan');
   }));
   const smode = document.getElementById('scoreMode');
-  if (smode) smode.onclick = e => { e.preventDefault(); ls.set('carrom:scoremode:' + t.id, '1'); toast('Butang 📝 Isi keputusan dipaparkan. PIN acara diperlukan.', 3500); viewLive(t); };
+  if (smode) smode.onclick = e => { e.preventDefault(); ls.set('carrom:scoremode:' + t.id, '1'); toast('Butang 🎯 Jaga skor dipaparkan. PIN acara diperlukan.', 3500); viewLive(t); };
   document.getElementById('meSel').onchange = async e => {
     ls.set(meKey(t), e.target.value || null); ls.set('carrom:meSet:' + t.id, '1');
     if (e.target.value && 'Notification' in window && Notification.permission === 'default' && ls.get('carrom:notif') !== '0') await askNotif();
@@ -3642,8 +3670,8 @@ function viewReport(t) {
   }
   const c = clubOf(t), f = E.SET_FORMATS;
   const played = t.matches.filter(m => m.status === 'done' && m.a !== 'BYE' && m.b !== 'BYE');
-  const resRow = m => { const r = E.evaluateMatch(t, m), team = E.isTeam(t);
-    return `<tr><td>${esc(E.matchCode(m) || '')}</td><td class="l">${m.winner === m.a ? '<b>' + esc(E.pname(t, m.a)) + '</b>' : esc(E.pname(t, m.a))}</td><td><b>${E.fmtFor(t, m.stage).bo === 1 ? (m.winner === m.a ? '◀ menang' : 'menang ▶') : E.tieScore(t, r).join('-')}</b></td><td class="l">${m.winner === m.b ? '<b>' + esc(E.pname(t, m.b)) + '</b>' : esc(E.pname(t, m.b))}</td></tr>`; };
+  const resRow = m => { const r = E.evaluateMatch(t, m), team = E.isTeam(t), bt = bakiTxt(m);
+    return `<tr><td>${esc(E.matchCode(m) || '')}</td><td class="l">${m.winner === m.a ? '<b>' + esc(E.pname(t, m.a)) + '</b>' : esc(E.pname(t, m.a))}</td><td><b>${E.fmtFor(t, m.stage).bo === 1 ? (m.winner === m.a ? '◀ menang' : 'menang ▶') : E.tieScore(t, r).join('-')}</b>${bt ? `<div class="st-sub">${bt}</div>` : ''}</td><td class="l">${m.winner === m.b ? '<b>' + esc(E.pname(t, m.b)) + '</b>' : esc(E.pname(t, m.b))}</td></tr>`; };
   const resTable = ms => ms.length ? `<div class="tw"><table class="rp"><thead><tr><th>No.</th><th class="l">${UNIT(t)}</th><th>Keputusan</th><th class="l">${UNIT(t)}</th></tr></thead><tbody>${ms.map(resRow).join('')}</tbody></table></div>` : '<p class="muted small">Belum ada keputusan.</p>';
   const ko = b => { const R = t.rounds[b]; if (!R) return ''; let h = '';
     for (let r = 1; r <= R; r++) { const ms = played.filter(m => m.bracket === b && m.round === r).sort((x, y) => x.slot - y.slot); if (ms.length) h += `<h4>${esc(E.roundName(t, b, r))}</h4>${resTable(ms)}`; }

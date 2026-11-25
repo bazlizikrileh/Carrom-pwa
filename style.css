@@ -1103,3 +1103,25 @@ body.tv .as-bar { display:none; }
   .tv-cr .tv-sub, .tv-cr .tv-next { font-size: clamp(12px, 3.6cqw, 20px); }
   .tv-cr .tv-tno { font-size: clamp(14px, 5cqw, 28px); }
 }
+/* Isi keputusan: butang nama penuh, sama lebar; baki setiap game */
+.gpick .set { grid-template-columns: 1fr 1fr; gap: 6px 8px; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+.gpick .set .g-lab { grid-column: 1 / -1; font-weight:700; }
+.gbtn { align-items:flex-start; text-align:left; line-height:1.2; min-height:52px; }
+.gbtn span { flex:1; min-width:0; overflow-wrap:anywhere; }
+.gpick .g-bk { grid-column: 1 / -1; display:flex; align-items:center; gap:8px; justify-content:flex-end; margin:0; font-size:13px; font-weight:600; }
+.gpick .g-bk select { width:auto; min-width:72px; margin:0; padding:6px 10px; }
+/* Jaga skor carrom */
+.sb-side { position:relative; }
+.sb-side .sb-coin { display:inline-flex; align-items:center; gap:6px; font-weight:700; font-size:14px; opacity:.95; margin:4px 0; }
+.sb-side .sb-coin .q-coin { width:18px; height:18px; }
+.sb-brk { position:absolute; top:8px; left:50%; transform:translateX(-50%); background:#fff; color:#3a1c07; font-size:11px; font-weight:900; letter-spacing:.08em; padding:3px 10px; border-radius:99px; white-space:nowrap; box-shadow:0 2px 6px rgba(0,0,0,.25); }
+.sb-side.brk { box-shadow: inset 0 0 0 4px #ffd166; }
+.sb-quick summary { font-weight:700; cursor:pointer; }
+.b3-gw { font-size:11px; opacity:.85; line-height:1.15; } .b3-gw b { font-weight:900; }
+.tv-cr .tvb .b3-gw { font-size: clamp(10px, min(3cqw, 4.4cqh), 20px); color:#ffe7b0; }
+.sets.gpick { display:block; }
+.gpick .set { width:100%; }
+.sb-brk { position:static; transform:none; display:inline-block; margin-bottom:6px; }
+.gpick .gbtn { display:grid; grid-template-columns: auto 1fr auto; align-items:center; gap:6px; padding:10px 8px; font-size:14px; }
+.gpick .gbtn span { overflow-wrap:break-word; word-break:normal; }
+.gpick .gbtn > *:first-child { font-size:15px; }

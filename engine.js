@@ -257,7 +257,10 @@ export function recordScore(t, matchId, rubberSets, extra = {}) {
   if (!m) throw new Error('Perlawanan tidak dijumpai');
   rubberSets.forEach((sets, i) => {
     if (!m.rubbers[i]) return;
-    m.rubbers[i].sets = sets.filter(s => s[0] !== '' && s[1] !== '' && s[0] != null && s[1] != null).map(([x, y]) => [Number(x) || 0, Number(y) || 0]);
+    const raw = sets.filter(s => s[0] !== '' && s[1] !== '' && s[0] != null && s[1] != null).map(([x, y]) => [Number(x) || 0, Number(y) || 0]);
+    // Carrom: game disimpan sebagai pemenang [1,0]/[0,1]; nilai lebih besar = baki+1 (buah lawan yang tinggal) → rubber.gb
+    m.rubbers[i].sets = raw.map(g => (g[0] === g[1] ? g : g[0] > g[1] ? [1, 0] : [0, 1]));
+    if (raw.some(g => Math.max(g[0], g[1]) > 1)) m.rubbers[i].gb = raw.map(g => Math.max(0, Math.max(g[0], g[1]) - 1)); else delete m.rubbers[i].gb;
   });
   if ('lineup' in extra) m.lineup = extra.lineup;
   if ('override' in extra) m.override = extra.override;
@@ -352,12 +355,19 @@ function setGroups(t, groups) {
 }
 
 // ---------- Kedudukan kumpulan ----------
-function emptyRow(id) { return { id, p: 0, w: 0, d: 0, l: 0, pts: 0, sf: 0, sa: 0, pf: 0, pa: 0 }; }
+function emptyRow(id) { return { id, p: 0, w: 0, d: 0, l: 0, pts: 0, sf: 0, sa: 0, pf: 0, pa: 0, bf: 0, ba: 0 }; }
+// Baki: buah lawan yang tinggal bila game tamat (dikira untuk pemenang game; ditolak bagi yang kalah)
+export function bakiOf(m, side) {
+  let f = 0, a = 0;
+  for (const r of m.rubbers || []) (r.sets || []).forEach((g, k) => { const b = (r.gb || [])[k] || 0; if (!b || g[0] === g[1]) return; if ((g[0] > g[1]) === (side === 'a')) f += b; else a += b; });
+  return [f, a];
+}
 function addResult(row, r, side, m, marks) {
   const me = side === 'a';
   row.p++;
   row.sf += me ? r.sa : r.sb; row.sa += me ? r.sb : r.sa;
   row.pf += me ? r.pa : r.pb; row.pa += me ? r.pb : r.pa;
+  { const [f, a] = bakiOf(m, side); row.bf += f; row.ba += a; }
   if (r.draw) { row.d++; row.pts += marks ? (me ? r.ma : r.mb) : 1; }
   else if (m.winner === (me ? m.a : m.b)) { row.w++; row.pts += marks ? (me ? r.ma : r.mb) : 3; }
   else { row.l++; if (marks) row.pts += me ? r.ma : r.mb; }
@@ -384,8 +394,9 @@ export function groupStandings(t, groupName) {
   const MK = usesMarks(t);
   for (const m of done) { const r = evaluateMatch(t, m); addResult(rows[m.a], r, 'a', m, MK); addResult(rows[m.b], r, 'b', m, MK); }
   // 1 mata, 2 beza perlawanan, 3 beza set  (S+S+D: 1 markah, 2 beza set)
-  const key = r => MK ? [r.pts, r.sf - r.sa, 0] : [r.pts, r.w - r.l, r.sf - r.sa];
-  const cmpKey = (x, y) => { const a = key(x), b = key(y); return (b[0] - a[0]) || (b[1] - a[1]) || (b[2] - a[2]); };
+  // carrom: 4 baki ± (selepas game ±, sebelum bersemuka)
+  const key = r => MK ? [r.pts, r.sf - r.sa, r.bf - r.ba, 0] : [r.pts, r.w - r.l, r.sf - r.sa, r.bf - r.ba];
+  const cmpKey = (x, y) => { const a = key(x), b = key(y); return (b[0] - a[0]) || (b[1] - a[1]) || (b[2] - a[2]) || (b[3] - a[3]); };
   // 4 bersemuka sesama yang masih seri, 5 beza mata; diulang bagi blok yang lebih kecil
   const resolve = S => {
     if (S.length < 2) return S;
