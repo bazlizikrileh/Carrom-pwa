@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.14.0';
+const VERSION = 'C1.15.0';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -1353,9 +1353,16 @@ function viewMatch(t, mid) {
     // kosongkan game selepas pemenang ditentukan (terbaik 3: 2-0 → game 3 tidak dimainkan)
     let wa = 0, wb = 0; for (let g = 0; g < f.bo; g++) { const x = inp2(ri, g); if (wa >= Math.ceil(f.bo / 2) || wb >= Math.ceil(f.bo / 2)) { x[0].value = ''; x[1].value = ''; } else if (x[0].value !== '') (+x[0].value > +x[1].value ? wa++ : wb++); }
     $app.querySelectorAll(`[data-g^="${ri}|"]`).forEach(x => { const [, kk, jj] = x.dataset.g.split('|').map(Number), y = inp2(ri, kk); x.classList.toggle('on', y[0].value !== '' && (+y[0].value > +y[1].value) === (jj === 0)); });
-    if (m.status !== 'done') { ls.set(dkey, JSON.stringify(read())); document.getElementById('dmsg').innerHTML = '<span class="draft">✏️ Draf disimpan di telefon ini</span>'; }
+    if (m.status !== 'done') { ls.set(dkey, JSON.stringify(read())); document.getElementById('dmsg').innerHTML = '<span class="draft">✏️ Draf disimpan di telefon ini</span>'; pushLive(); }
     upd();
   }));
+  // pilihan pemenang game terus dipapar di Langsung & Mod TV (sebelum keputusan disimpan)
+  function pushLive() {
+    if (m.status === 'done' || !store.isCloud(t.id)) return;
+    const rs = clean(read()); let ri = rs.findIndex(sets => !lsRubberDone(t, m, sets)); if (ri < 0) ri = rs.length - 1;
+    clearTimeout(_lsTimer);
+    _lsTimer = setTimeout(() => cloud.setLive(t.id, m.id, { rs, cur: [0, 0], ri: Math.max(0, ri), sw: false, by: ls.get('carrom:myname') || (edit ? 'Penganjur' : 'Pengadil'), tb: m.lt || m.table || '' }).catch(e => console.warn('live', e)), 250);
+  }
   const inp2 = (ri, g) => [0, 1].map(s2 => $app.querySelector(`[data-r="${ri}"][data-i="${g}"][data-s="${s2}"]`));
   $app.querySelectorAll('.sets input').forEach(i => (i.oninput = () => {
     if (m.status !== 'done') { ls.set(dkey, JSON.stringify(read())); document.getElementById('dmsg').innerHTML = '<span class="draft">✏️ Draf skor disimpan di telefon ini</span>'; }
@@ -2590,8 +2597,19 @@ const LS_STALE = 10 * 60e3, LS_FRESH = 12 * 3600e3, _lsHist = {};   // skor lang
 let _lsTimer = null, _lsOnLive = null, _lsAuto = null; const _lsAutoOff = {};
 LV.setLiveRi((t, m) => { const x = store.isCloud(t.id) ? liveOf(t, m) : null; return x ? x.ri : null; });
 function liveOf(t, m, id = m.id) {
+  if (!store.isCloud(t.id)) return draftLive(t, m);
   const x = ((cloud.state.live || {})[t.id] || {})[id];
   return x && m.status !== 'done' && Date.now() - x.at < LS_FRESH ? x : null;
+}
+// Pertandingan di telefon ini sahaja: pilihan pemenang game (draf) dipapar terus di Langsung & Mod TV
+function draftLive(t, m) {
+  if (!m || m.status === 'done') return null;
+  let d = null; try { d = JSON.parse(ls.get('carrom:draft:' + m.id) || 'null'); } catch {}
+  if (!Array.isArray(d)) return null;
+  const rs = d.map(sets => (sets || []).filter(s => s[0] !== '' && s[1] !== '').map(x => x.map(Number)));
+  if (!rs.some(x => x.length)) return null;
+  let ri = rs.findIndex(sets => !lsRubberDone(t, m, sets)); if (ri < 0) ri = rs.length - 1;
+  return { rs, ri: Math.max(0, ri), cur: [0, 0], at: Date.now(), by: '' };
 }
 const liveAgo = x => { const mi = Math.floor((Date.now() - x.at) / 60e3); return Date.now() - x.at > LS_STALE ? ` <span class="lv-ago">· ⏸️ ${mi < 60 ? mi + ' min' : Math.floor(mi / 60) + ' jam'} lalu</span>` : ''; };
 function liveBadge(t, m, cls = 'lv-sc') {
@@ -2602,24 +2620,26 @@ function liveBadge(t, m, cls = 'lv-sc') {
 }
 // Nama di atas papan + skor langsung (jika ada) terus pada setiap sisi papan
 function courtSide(t, m, k, x) {
-  const id = k ? m.b : m.a;
-  const done = (m.rubbers[0] || { sets: [] }).sets.length, gk = Math.min(done, E.fmtFor(t, m.stage).bo - 1);
-  if (!x) return `<div>${CDOT[E.colourOf(m, k ? 'b' : 'a', gk)]} ${esc(E.pname(t, id))}</div>`;
-  const won = (x.rs[x.ri] || []).filter(s => (k ? s[1] > s[0] : s[0] > s[1])).length, fin = liveDone(t, m, x);
-  if (fin) { // semua set tamat tetapi belum disimpan: papar jumlah set (atau markah pasukan) sebagai skor besar
-    const r = E.evaluateMatch(t, { ...m, rubbers: x.rs.map(sets => ({ sets })) }), big = E.isTeam(t) ? (t.tieFormat === 'SSD' ? [r.ma, r.mb] : [r.ra, r.rb]) : [r.sa, r.sb];
-    const win = r.winner === (k ? m.b : m.a);
-    return `<div class="cs"><span class="cs-nm">${esc(E.pname(t, id))}</span><span class="cs-pt">${big[k]}</span><span class="cs-sets">${win ? '🏆 <small>MENANG</small>' : '&nbsp;'}</span></div>`;
+  const sd = k ? 'b' : 'a', id = k ? m.b : m.a, team = E.isTeam(t), f = E.fmtFor(t, m.stage);
+  const ri = x ? x.ri || 0 : 0, g = x ? x.rs[ri] || [] : [];
+  const gk = Math.min(g.length, f.bo - 1) + (team ? ri : 0), col = E.colourOf(m, sd, gk), brk = E.whiteSide(m, gk) === sd;
+  const nm = `<span class="cs-nm">${esc(E.pname(t, id))}</span>`;
+  const chip = `<span class="cs-col">${CDOT[col]} ${col === 'w' ? 'Putih' : 'Hitam'}${brk ? ' · <b>pukul dahulu</b>' : ''}</span>`;
+  if (!x) return `<div class="cs">${nm}${chip}</div>`;
+  if (liveDone(t, m, x)) { // semua game tamat tetapi belum disimpan: jumlah game (atau markah pasukan) + pemenang
+    const r = E.evaluateMatch(t, { ...m, rubbers: x.rs.map(sets => ({ sets })) }), big = team ? (t.tieFormat === 'SSD' ? [r.ma, r.mb] : [r.ra, r.rb]) : [r.sa, r.sb];
+    return `<div class="cs">${nm}<span class="cs-pt">${big[k]}</span><span class="cs-col">${r.winner === id ? '🏆 <b>MENANG</b>' : '&nbsp;'}</span></div>`;
   }
-  return `<div class="cs"><span class="cs-nm">${esc(E.pname(t, id))}</span><span class="cs-pt">${x.cur[k]}</span><span class="cs-sets" title="Set dimenangi">${won ? '●'.repeat(won) + ` <small>${won} set</small>` : '&nbsp;'}</span></div>`;
+  const won = g.filter(s => (k ? s[1] > s[0] : s[0] > s[1])).length;
+  return `<div class="cs">${nm}<span class="cs-pt">${won}</span>${chip}</div>`;
 }
 // "SET 2 · 1–0": set yang sedang dimainkan + set dimenangi setiap pihak
 // Semua perlawanan/set dalam pertemuan sudah tamat (skor langsung belum disimpan)
 const liveDone = (t, m, x) => !!(m && m.rubbers.length && m.rubbers.every((_, i) => lsRubberDone(t, m, x.rs[i] || [])));
 function setTag(t, x, m) {
-  if (liveDone(t, m, x)) return `🏁 TAMAT · ${E.isTeam(t) ? 'markah' : 'set'} · menunggu disimpan`;
-  const g = x.rs[x.ri] || [];
-  return `${E.isTeam(t) ? esc(E.rubberLabel(t, x.ri)) + ' · ' : ''}SET ${g.length + 1}`;
+  if (liveDone(t, m, x)) return '🏁 TAMAT · menunggu disimpan';
+  const g = x.rs[x.ri] || [], bo = E.fmtFor(t, m.stage).bo;
+  return `${E.isTeam(t) ? esc(E.rubberLabel(t, x.ri)) + ' · ' : ''}GAME ${Math.min(g.length + 1, bo)}/${bo}`;
 }
 const scoreMode = t => canEdit(t) || !!ls.get('carrom:scorer:' + t.id) || ls.get('carrom:scoremode:' + t.id) === '1';
 // Maklum balas tekan: kilat pada sisi + bunyi "tik" pendek (Web Audio ikut volum media, bukan mod senyap)
@@ -2860,7 +2880,7 @@ function viewLive(t) {
     const rl = m && E.isTeam(t) && (ri != null || m.xt) ? ` · <b>${ri != null ? esc(E.rubberLabel(t, ri)) : m.rubbers.map((_, i) => i).filter(i => !(m.xt && m.xt[i] != null)).map(i => esc(E.rubberLabel(t, i))).join(' + ')}</b>` : '';
     return `<div class="tt${mine ? ' me' : ''}${m ? '' : ' free'}${x ? ' on' : ''}"><div class="tt-h"><b>PAPAN ${k}</b>${m ? `<small>${x ? `<span class="lv-dot"></span> <b class="lv-set">${setTag(t, x, m)}</b>${liveAgo(x)} · ` : ''}${esc(E.matchCode(m) || '')} · ${esc(E.stageLabel(t, m))}${rl}</small>` : ''}</div>
       ${m ? `<a class="tt-top${x ? ' live' : ''}" href="#/t/${t.id}/m/${m.id}">${x && x.sw ? courtSide(t, m, 1, x) : courtSide(t, m, 0, x)}<div class="tt-net"></div>${x && x.sw ? courtSide(t, m, 0, x) : courtSide(t, m, 1, x)}</a>
-        ${x && edit ? `<div class="lv-by2">🎯 Dijaga oleh <b>${esc(x.by || 'tanpa nama')}</b><button type="button" class="pill-btn small light" data-rel="${lid}">🔓 Lepaskan</button></div>` : ''}
+        ${x && edit && store.isCloud(t.id) ? `<div class="lv-by2">🎯 Dijaga oleh <b>${esc(x.by || 'tanpa nama')}</b><button type="button" class="pill-btn small light" data-rel="${lid}">🔓 Lepaskan</button></div>` : ''}
         ${u ? `<div class="tt-u">🟣 Pengadil: <b>${esc(E.pname(t, u))}</b></div>` : ''}
         ${scoreMode(t) || iUmp ? `<div class="row tt-act"><a class="pill-btn small orange" href="#/t/${t.id}/m/${m.id}">📝 Isi keputusan</a>${edit && ri == null ? `<button class="pill-btn small light" data-tgh="${m.id}" title="Tangguh">⏸️ Tangguh</button>` : ''}</div>` : ''}`
       : '<div class="tt-top tt-empty"><div>Papan kosong</div></div>'}
@@ -2942,8 +2962,14 @@ function tvSlideHtml(t, sl) {
     const { occ, xr } = LV.liveState(t), nx = LV.nextUp(t), U = LV.umpirePlan(t);
     const all = LV.tableList(t), list = all.slice((sl.p || 0) * TV_PER, ((sl.p || 0) + 1) * TV_PER), n = list.length;
     const cols = n <= 1 ? 1 : n <= 4 ? 2 : n <= 6 ? 3 : n === 9 ? 3 : 4;
-    return `<h2 class="tv-h">🟢 Sedang berlangsung${sl.pages > 1 ? ` <small class="tv-pg">Papan ${list[0].k}–${list[n - 1].k} · ${sl.p + 1}/${sl.pages}</small>` : ''}<small class="tv-leg">⚪ Putih/Coklat pukul dahulu · ⚫ Hitam</small></h2>
-      <div class="tv-tables tv-cb-grid" style="--tvc:${cols};--tvr:${Math.ceil(n / cols)}">${list.map(({ k }) => tvBoard(t, k, occ[k], xr[k], nx[k], U)).join('')}</div>`;
+    return `<h2 class="tv-h">🟢 Sedang berlangsung${sl.pages > 1 ? ` <small class="tv-pg">Papan ${list[0].k}–${list[n - 1].k} · ${sl.p + 1}/${sl.pages}</small>` : ''}</h2>
+      <div class="tv-tables tv-cr" style="--tvc:${cols};--tvr:${Math.ceil(n / cols)}">${list.map(({ k }) => {
+      const m = occ[k], ri = xr[k], u = m && ri == null ? LV.umpireOf(t, m, U) : '', x = m ? liveOf(t, m, m.id + (ri != null ? '~' + ri : '')) : null;
+      const sub = m ? `${x ? `<span class="lv-dot"></span> <b class="lv-set">${setTag(t, x, m)}</b> · ` : `<b class="lv-set">GAME 1/${E.fmtFor(t, m.stage).bo}</b> · `}${esc(E.stageLabel(t, m))}${u ? ` · 🟣 ${esc(E.pname(t, u))}` : ''}` : '';
+      return `<div class="tv-tt ${m ? '' : 'free'}${x && !liveDone(t, m, x) && (x.rs[x.ri] || []).length && new Set((x.rs[x.ri] || []).map(g => g[0] > g[1])).size > 1 && E.fmtFor(t, m.stage).bo - (x.rs[x.ri] || []).length === 1 ? ' hot' : ''}"><div class="tv-tno">PAPAN ${esc(k)}</div>
+        ${m ? `<div class="tv-court${x ? ' live' : ''}">${courtSide(t, m, 0, x)}<i></i>${courtSide(t, m, 1, x)}</div><div class="tv-sub">${sub}</div>` : '<div class="tv-court empty"><div>Kosong</div></div>'}
+        ${nx[k] ? `<div class="tv-next">⏭️ ${esc(E.pname(t, nx[k].a))} lwn ${esc(E.pname(t, nx[k].b))}</div>` : ''}</div>`;
+    }).join('')}</div>`;
   }
   if (sl.k === 'groups') return `<h2 class="tv-h">📊 ${t.format === 'rr' ? 'Kedudukan liga' : 'Kedudukan kumpulan'}</h2><div class="tv-cols">${sl.g.map(g => `<div class="tv-card"><h3>${t.format === 'rr' ? 'Liga' : 'Kumpulan ' + esc(g.name)}</h3>${standingsTable(t, g)}</div>`).join('')}</div>`;
   if (sl.k === 'ko') return `<h2 class="tv-h">⚔️ Kalah mati</h2><div class="tv-card tv-fit"><div class="tv-scale">${bracketHtml(t, 'ko')}</div></div>`;
@@ -2957,31 +2983,6 @@ function tvSlideHtml(t, sl) {
   return `<div class="tv-wait"><div class="big">${cd ? `Bermula dalam <b id="cdown">${cdText(t)}</b>` : 'Pertandingan akan bermula sebentar lagi'}</div></div>`;
 }
 const TV_PER = 12;
-// Mod TV: setiap perlawanan sebagai papan carrom kecil (pandangan atas). Keputusan sahaja: jumlah besar = game dimenangi.
-function tvBoard(t, k, m, ri, nx, U) {
-  const head = `<div class="tv-tno">PAPAN ${esc(k)}</div>`;
-  const next = nx ? `<div class="tv-next">⏭️ ${CDOT[E.colourOf(nx, 'a', 0)]} ${esc(E.pname(t, nx.a))} lwn ${CDOT[E.colourOf(nx, 'b', 0)]} ${esc(E.pname(t, nx.b))}</div>` : '';
-  if (!m) return `<div class="tv-tt tv-cb free">${head}<div class="cb-row"><div class="cb-side"></div><div class="cb-board"><i class="pk p1"></i><i class="pk p2"></i><i class="pk p3"></i><i class="pk p4"></i><div class="cb-play"><i class="cb-c"></i></div></div><div class="cb-side"></div></div><div class="cb-gm">KOSONG</div>${next}</div>`;
-  const team = E.isTeam(t), f = E.fmtFor(t, m.stage), r = E.evaluateMatch(t, m), big = E.tieScore(t, r);
-  // rubber & game semasa
-  let cri = 0; if (team) { cri = m.rubbers.findIndex(x => !x || !E.evaluateMatch(t, { ...m, rubbers: [x] }).winner); if (cri < 0) cri = Math.max(0, m.rubbers.length - 1); }
-  const sets = ((m.rubbers[cri] || {}).sets || []), gi = Math.min(sets.length, f.bo - 1), ck = gi + (team ? cri : 0);
-  const ga = sets.filter(g => g[0] > g[1]).length, gb = sets.length - ga, need = Math.ceil(f.bo / 2);
-  const decider = !team && f.bo > 1 && ga === need - 1 && gb === need - 1;
-  const wSide = E.whiteSide(m, ck), u = ri == null ? LV.umpireOf(t, m, U) : '';
-  const side = sd => { const id = sd === 'a' ? m.a : m.b, c = E.colourOf(m, sd, ck);
-    return `<div class="cb-side ${sd}"><div class="cb-nm">${esc(E.pname(t, id))}</div><div class="cb-big">${big[sd === 'a' ? 0 : 1]}</div>
-      <div class="cb-col ${c}"><i></i>${c === 'w' ? 'PUTIH' : 'HITAM'}${wSide === sd ? ' · PUKUL DAHULU' : ''}</div></div>`; };
-  const gtxt = team ? esc(E.rubberLabel(t, cri)) : f.bo > 1 ? `GAME ${gi + 1}/${f.bo}` : '1 GAME';
-  const coin = sd => `<i class="cb-coin ${E.colourOf(m, sd, ck)}"></i>`;
-  return `<div class="tv-tt tv-cb${decider ? ' hot' : ''}">${head}
-    <div class="cb-row">${side('a')}
-      <div class="cb-board"><i class="pk p1"></i><i class="pk p2"></i><i class="pk p3"></i><i class="pk p4"></i>
-        <div class="cb-play"><i class="bl l"></i><i class="bl r"></i><i class="bl t"></i><i class="bl b"></i><i class="cb-c"></i>${coin('a').replace('cb-coin', 'cb-coin sa')}${coin('b').replace('cb-coin', 'cb-coin sb')}</div></div>
-      ${side('b')}</div>
-    <div class="cb-gm">${gtxt}${decider ? ' · 🔥 GAME PENENTU' : ''}${f.bo > 1 && !team && sets.length ? ` <span>${sets.map((g, x) => CDOT[E.colourOf(m, g[0] > g[1] ? 'a' : 'b', x)]).join('')}</span>` : ''}</div>
-    <div class="tv-sub">${esc(E.stageLabel(t, m))}${u ? ` · 🟣 ${esc(E.pname(t, u))}` : ''}</div>${next}</div>`;
-}
 function tvLiveRefresh() {
   const t = _tv.id && load(_tv.id), body = document.getElementById('tvBody'); if (!t || !body) return;
   const S = tvSlides(t), sl = S[_tv.i % S.length];
