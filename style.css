@@ -1134,3 +1134,7 @@ body.tv .as-bar { display:none; }
   .tv-cr .tvb .q-coin { width: clamp(8px, min(4cqw, 3cqh), 22px) !important; height: clamp(8px, min(4cqw, 3cqh), 22px) !important; }
   .tv-cr .b3.tvb:not(.quad) { --S: min(40cqw, 40cqh); }
 }
+/* papan di tab Langsung: latar krim tetap → tulisan gelap walaupun mod gelap */
+.b3:not(.tvb), .b3:not(.tvb) .b3-nm, .b3:not(.tvb) .q-n, .b3:not(.tvb) .q-sc span { color:#2a1407; }
+.b3:not(.tvb) .b3-tag, .b3:not(.tvb) .q-sc small, .b3:not(.tvb) .b3-gw { color:#6b3f17; }
+.b3:not(.tvb) .q-n small, .b3:not(.tvb) .b3-tag b { color:#b45309; }
