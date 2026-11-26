@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.19.1';
+const VERSION = 'C1.19.2';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -1319,7 +1319,7 @@ function viewMatch(t, mid) {
       <p class="small" style="margin:4px 0 0">🎯 ${esc(breakLine(t, m))}</p>
       <label>Siapa menang? (tekan nama pemenang setiap game)</label>
       ${seatCard()}
-      <label class="check gp-bkt"><input type="checkbox" id="bkOn" ${ls.get('carrom:bkOn') === '1' || (m.rubbers || []).some(r => (r.gb || []).some(Boolean)) ? 'checked' : ''}> <span>➕ Catat baki (pilihan): buah lawan yang tinggal</span></label>
+      <label class="check gp-bkt"><input type="checkbox" id="bkOn" ${ls.get('carrom:bkOn') !== '0' || (m.rubbers || []).some(r => (r.gb || []).some(Boolean)) ? 'checked' : ''}> <span>Catat baki: buah lawan yang tinggal (pilihan)</span></label>
       <div class="gp-wrap">${m.rubbers.map(rubberHtml).join('')}</div>
       ${team && t.tieFormat === 'SSD' ? '<p id="dupa" class="small" style="color:#b3261e"></p><p id="dupb" class="small" style="color:#b3261e"></p>' : ''}
       <p id="summary"></p>
@@ -1413,7 +1413,7 @@ function viewMatch(t, mid) {
   };
   $app.querySelectorAll('[data-wf]').forEach(x => (x.onclick = () => setSeat({ wf: x.dataset.wf })));
   $app.querySelectorAll('[data-st]').forEach(x => (x.onclick = () => { const [sd, i] = x.dataset.st.split('|'); setSeat({ [sd]: +i }); }));
-  { const bo = document.getElementById('bkOn'), w = $app.querySelector('.gp-wrap'); const sync = () => w && w.classList.toggle('bk-on', bo.checked); if (bo) { sync(); bo.onchange = () => { ls.set('carrom:bkOn', bo.checked ? '1' : null); sync(); }; } }
+  { const bo = document.getElementById('bkOn'), w = $app.querySelector('.gp-wrap'); const sync = () => w && w.classList.toggle('bk-on', bo.checked); if (bo) { sync(); bo.onchange = () => { ls.set('carrom:bkOn', bo.checked ? null : '0'); sync(); }; } }
   $app.querySelectorAll('[data-bk]').forEach(sel => (sel.onchange = () => {
     const [ri, k] = sel.dataset.bk.split('|').map(Number), y = inp2(ri, k);
     if (y[0].value !== '') { const b = +sel.value || 0; if (+y[0].value > +y[1].value) y[0].value = b + 1; else y[1].value = b + 1; }
