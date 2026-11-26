@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.18.0';
+const VERSION = 'C1.19.0';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -1170,7 +1170,7 @@ function hcLine(t, who, n) {
   return hcTypeOf(t) === 'buah' ? `Handicap: ${who} mula dengan ${n} buah sudah dikeluarkan (perlu masukkan ${9 - n} buah sahaja) setiap game` : `Handicap: kelebihan ${n} kepada ${who}`;
 }
 // siapa pukul dahulu (Putih/Coklat memulakan game)
-const breakLine = (t, m, k = 0) => `${E.colourOf(m, 'a', k) === 'w' ? E.pname(t, m.a) : E.pname(t, m.b)} (⚪ Putih/Coklat) pukul dahulu${E.isTeam(t) ? ' dalam perlawanan pertama; warna bertukar setiap perlawanan/game' : E.fmtFor(t, m.stage).bo > 1 ? ' game 1; warna bertukar setiap game' : ''}`;
+const breakLine = (t, m0, k = 0, m = effM(t, m0)) => `${E.colourOf(m, 'a', k) === 'w' ? E.pname(t, m.a) : E.pname(t, m.b)} (⚪ Putih/Coklat) pukul dahulu${E.isTeam(t) ? ' dalam perlawanan pertama; warna bertukar setiap perlawanan/game' : E.fmtFor(t, m.stage).bo > 1 ? ' game 1; warna bertukar setiap game' : ''}`;
 // "baki 3, 5, 2" — baki setiap game (buah lawan yang tinggal), jika dicatat
 const bakiTxt = m => { const L = (m.rubbers || []).flatMap(r => (r.sets || []).map((g, k) => (r.gb || [])[k])).filter(v => v != null); return L.length && L.some(v => v > 0) ? 'baki ' + L.join(', ') : ''; };
 const setRuleTxt = t => 'Kiraan warna: setiap regu mula dengan 9 buah warnanya; regu yang habiskan buahnya dahulu menang game; baki = buah lawan yang masih tinggal. Queen tidak dikira. Warna buah diundi dan bertukar setiap game';
@@ -1279,12 +1279,28 @@ function viewMatch(t, mid) {
     const who = team ? (h.to === m.a ? A.name : B.name) + (h.kind === 'D' ? ' (regu)' : '') : E.pname(t, h.to);
     return `<div class="hc-r">⚖️ ${esc(hcLine(t, who, h.n))}${h.sa != null ? ` <span class="muted">(nilai ${h.sa} lwn ${h.sb})</span>` : ''}</div>`;
   };
+  // 🎯 Siapa mula: regu putih (pukul dahulu) + pemain pertama & susunan duduk (double)
+  const seatCard = () => {
+    if (m.status === 'done') return '';
+    const o = seatOf(t, m), SR = seatRing(t, m), Am = A.members || [], Bm = B.members || [], f0 = E.fmtFor(t, m.stage);
+    const b = (lab, on, attr) => `<button type="button" class="pill-btn small ${on ? 'brand' : 'light'}" ${attr}>${lab}</button>`;
+    const W = o.wf === 'a' ? Am : Bm, O = o.wf === 'a' ? Bm : Am, wi = o.wf === 'a' ? o.a : o.b, oi = o.wf === 'a' ? o.b : o.a;
+    const games = Array.from({ length: f0.bo }, (_, k) => SR ? SR.order[k % 4] : E.pname(t, E.whiteSide(effM(t, m), k) === 'a' ? m.a : m.b));
+    return `<details class="card soft seat-card" ${(src[0] || []).some(g => g && g[0] !== '') ? '' : 'open'}><summary>🎯 Siapa mula: <b>${esc(games[0])}</b> <span class="muted small">(⚪ Putih)</span></summary>
+      <div class="srv-row"><span>Regu pukul dahulu (⚪ Putih)</span>${b(esc(A.name), o.wf === 'a', 'data-wf="a"')}${b(esc(B.name), o.wf === 'b', 'data-wf="b"')}</div>
+      ${SR ? `<div class="srv-row"><span>Pemain mula</span>${W.map((n, i) => b(esc(n), wi === i, `data-st="${o.wf}|${i}"`)).join('')}</div>
+      <div class="srv-row"><span>Seterusnya (di sebelah kanannya)</span>${O.map((n, i) => b(esc(n), oi === i, `data-st="${o.wf === 'a' ? 'b' : 'a'}|${i}"`)).join('')}</div>
+      <div class="seat-prev">${boardHtml(t, m, null, 'seatb')}</div>
+      <p class="muted small" style="margin:4px 0 0">Rakan sepasukan duduk bertentangan. Giliran ke kanan (lawan arah jam): ${SR.order.map((n, i) => `${i + 1}. ${esc(n)}`).join(' → ')}.</p>` : ''}
+      ${f0.bo > 1 ? `<p class="small" style="margin:6px 0 0">${games.map((n, k) => `Game ${k + 1}: <b>${esc(n)}</b> mula`).join(' · ')}</p>` : ''}
+    </details>`;
+  };
   const rubberHtml = (r, i) => {
     const rows = Array.from({ length: f.bo }, (_, k) => (src[i] || [])[k] || ['', '']);
     return `<div class="rubber">${team ? `<h3>${rubTitle(i)}</h3>${lineupHtml(i)}<div id="hc${i}">${hcText(E.handicapInfo(t, m.a, m.b, i, L), L)}</div>` : ''}
       <div class="sets gpick">${rows.map((s, k) => `<div class="set"><span class="muted small g-lab">Game ${k + 1}</span>
         <input type="hidden" data-r="${i}" data-i="${k}" data-s="0" value="${s[0]}"><input type="hidden" data-r="${i}" data-i="${k}" data-s="1" value="${s[1]}">
-        ${['a', 'b'].map((sd, j) => `<button type="button" class="gbtn ${s[0] !== '' && (s[0] > s[1]) === (j === 0) ? 'on' : ''}" data-g="${i}|${k}|${j}" ${edit || m.status !== 'done' ? '' : 'disabled'}>${colTag(m, sd, k + i)} <span>${esc((sd === 'a' ? A : B).name)}</span></button>`).join('')}
+        ${['a', 'b'].map((sd, j) => `<button type="button" class="gbtn ${s[0] !== '' && (s[0] > s[1]) === (j === 0) ? 'on' : ''}" data-g="${i}|${k}|${j}" ${edit || m.status !== 'done' ? '' : 'disabled'}>${colTag(effM(t, m), sd, k + i)} <span>${esc((sd === 'a' ? A : B).name)}</span></button>`).join('')}
         <label class="g-bk">Baki <select data-bk="${i}|${k}" ${edit || m.status !== 'done' ? '' : 'disabled'}>${['', 0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(v => `<option value="${v}" ${s[0] !== '' && v !== '' && Math.max(+s[0], +s[1]) - 1 === v && Math.max(+s[0], +s[1]) > 1 ? 'selected' : ''}>${v === '' ? '—' : v}</option>`).join('')}</select></label></div>`).join('')}</div></div>`;
   };
   const h = E.handicapInfo(t, m.a, m.b);
@@ -1302,6 +1318,7 @@ function viewMatch(t, mid) {
       <label>Papan</label><select id="tbl">${['', ...E.tablesOf(t)].map(x => `<option ${x === m.table ? 'selected' : ''} value="${esc(x)}">${esc(x || '—')}</option>`).join('')}</select>
       <p class="small" style="margin:4px 0 0">🎯 ${esc(breakLine(t, m))}</p>
       <label>Siapa menang? (tekan nama pemenang setiap game)</label>
+      ${seatCard()}
       <label class="check gp-bkt"><input type="checkbox" id="bkOn" ${ls.get('carrom:bkOn') === '1' || (m.rubbers || []).some(r => (r.gb || []).some(Boolean)) ? 'checked' : ''}> <span>➕ Catat baki (pilihan): buah lawan yang tinggal</span></label>
       <div class="gp-wrap">${m.rubbers.map(rubberHtml).join('')}</div>
       ${team && t.tieFormat === 'SSD' ? '<p id="dupa" class="small" style="color:#b3261e"></p><p id="dupb" class="small" style="color:#b3261e"></p>' : ''}
@@ -1373,7 +1390,8 @@ function viewMatch(t, mid) {
     if (m.status === 'done' || !store.isCloud(t.id)) return;
     const rs = clean(read()); let ri = rs.findIndex(sets => !lsRubberDone(t, m, sets)); if (ri < 0) ri = rs.length - 1;
     clearTimeout(_lsTimer);
-    if (!rs.some(x => x.length)) { dropLive(t, m.id); return; }   // semua game dikosongkan → buang skor langsung
+    const seatLocal = !edit && ls.get('carrom:seat:' + m.id);
+    if (!rs.some(x => x.length) && !seatLocal) { dropLive(t, m.id); return; }   // semua game dikosongkan → buang skor langsung
     _lsTimer = setTimeout(async () => {
       try {
         if (!edit) {   // pengadil: tuntut kebenaran penjaga skor dengan PIN acara (sekali sahaja)
@@ -1381,12 +1399,20 @@ function viewMatch(t, mid) {
           if (!pin) { toast('Masukkan PIN acara (di bawah) supaya keputusan dipapar terus di Langsung & Mod TV', 4000); return; }
           if (ls.get('carrom:scorer:' + t.id) !== pin) { await cloud.claimScorer(t.id, pin); ls.set('carrom:scorer:' + t.id, pin); ls.set('carrom:pin:' + t.id, pin); }
         }
-        await cloud.setLive(t.id, m.id, { rs, cur: [0, 0], ri: Math.max(0, ri), sw: false, by: ls.get('carrom:myname') || (edit ? 'Penganjur' : 'Pengadil'), tb: String(m.lt || m.table || '') });
+        await cloud.setLive(t.id, m.id, { rs, cur: [0, 0], ri: Math.max(0, ri), sw: false, by: ls.get('carrom:myname') || (edit ? 'Penganjur' : 'Pengadil'), tb: (() => { const o = seatOf(t, m); return `${String(m.lt || m.table || '').replace(/^Papan\s*/i, '').slice(0, 8)}|${o.wf},${o.a},${o.b}`; })() });
       } catch (e) { console.warn('live', e); toast((e.code === 'permission-denied' ? 'PIN salah / tiada kebenaran' : 'Gagal') + ' — keputusan belum dipapar langsung (' + (e.code || e.message) + ')', 5000); }
     }, 250);
   }
 
   const inp2 = (ri, g) => [0, 1].map(s2 => $app.querySelector(`[data-r="${ri}"][data-i="${g}"][data-s="${s2}"]`));
+  const setSeat = ch => {
+    const o = { ...seatOf(t, m), ...ch };
+    if (edit) { m.wf = o.wf; m.seat = { a: o.a, b: o.b }; ls.set('carrom:seat:' + m.id, null); save(t); }
+    else ls.set('carrom:seat:' + m.id, JSON.stringify(o));
+    pushLive(); viewMatch(t, mid);
+  };
+  $app.querySelectorAll('[data-wf]').forEach(x => (x.onclick = () => setSeat({ wf: x.dataset.wf })));
+  $app.querySelectorAll('[data-st]').forEach(x => (x.onclick = () => { const [sd, i] = x.dataset.st.split('|'); setSeat({ [sd]: +i }); }));
   { const bo = document.getElementById('bkOn'), w = $app.querySelector('.gp-wrap'); const sync = () => w && w.classList.toggle('bk-on', bo.checked); if (bo) { sync(); bo.onchange = () => { ls.set('carrom:bkOn', bo.checked ? '1' : null); sync(); }; } }
   $app.querySelectorAll('[data-bk]').forEach(sel => (sel.onchange = () => {
     const [ri, k] = sel.dataset.bk.split('|').map(Number), y = inp2(ri, k);
@@ -2690,9 +2716,30 @@ function quadOf(t, m, ri) {
   const A = E.pobj(t, m.a), B = E.pobj(t, m.b);
   return A && B && (A.members || []).length === 2 && (B.members || []).length === 2 ? [A.members, B.members] : null;
 }
+// ---------- Siapa mula & susunan duduk ----------
+// m.wf = regu putih (pukul dahulu) game 1; m.seat = { a, b } = indeks ahli regu A/B yang pertama dalam giliran.
+// Pemain bukan penganjur: disimpan di telefon (carrom:seat:<id>) & dihantar dalam skor langsung (tb = "papan|wf,a,b").
+function seatOf(t, m) {
+  let o = { wf: m.wf || 'a', a: (m.seat || {}).a || 0, b: (m.seat || {}).b || 0 };
+  try { const l = JSON.parse(ls.get('carrom:seat:' + m.id) || 'null'); if (l) o = { ...o, ...l }; } catch {}
+  const x = store.isCloud(t.id) ? ((cloud.state.live || {})[t.id] || {})[m.id] : null;
+  if (x && x.tb && String(x.tb).includes('|')) { const [w, a, b] = String(x.tb).split('|')[1].split(','); if (w === 'a' || w === 'b') o = { wf: w, a: +a || 0, b: +b || 0 }; }
+  return o;
+}
+const effM = (t, m) => { const o = seatOf(t, m); return o.wf === m.wf ? m : { ...m, wf: o.wf }; };
+// Susunan duduk double (giliran ke kanan / lawan jam): bawah → kanan → atas → kiri. Regu A atas/bawah, regu B kiri/kanan.
+function seatRing(t, m) {
+  if (E.isTeam(t)) return null;
+  const A = (E.pobj(t, m.a) || {}).members || [], B = (E.pobj(t, m.b) || {}).members || [];
+  if (A.length !== 2 || B.length !== 2) return null;
+  const o = seatOf(t, m), a1 = A[o.a], a2 = A[1 - o.a], b1 = B[o.b], b2 = B[1 - o.b];
+  const pos = o.wf === 'a' ? { bt: a1, r: b1, t: a2, l: b2 } : { r: b1, t: a1, l: b2, bt: a2 };
+  const ring = o.wf === 'a' ? ['bt', 'r', 't', 'l'] : ['r', 't', 'l', 'bt'];
+  return { pos, ring, order: ring.map(p => pos[p]) };
+}
 function boardHtml(t, m, x, cls, href) {
   const q = quadOf(t, m, x ? x.ri || 0 : 0), tag = href ? 'a' : 'div';
-  return `<${tag} class="b3 ${q ? 'quad ' : ''}${cls || ''}${x ? ' live' : ''}"${href ? ` href="${href}"` : ''}>${boardRow(t, m, x, q)}</${tag}>`;
+  return `<${tag} class="b3 ${q ? 'quad ' : ''}${cls || ''}${x ? ' live' : ''}"${href ? ` href="${href}"` : ''}>${boardRow(t, effM(t, m), x, q)}</${tag}>`;
 }
 function boardRow(t, m, x, q) {
   const team = E.isTeam(t), f = E.fmtFor(t, m.stage), ri = x ? x.ri || 0 : 0, g = x ? x.rs[ri] || [] : [];
@@ -2714,6 +2761,12 @@ function boardRow(t, m, x, q) {
     const nm = (n, c, pos, brk) => `<div class="q-n ${pos}"><span><i class="q-coin ${c}"></i>${esc(n)}</span>${brk && !fin ? '<small>pukul dahulu</small>' : ''}</div>`;
     const sc = (k, c) => `<div class="q-sc ${k ? 'b' : 'a'}${fin && r.winner === (k ? m.b : m.a) ? ' win' : ''}"><i class="q-coin ${c}"></i><span>${esc(E.pname(t, k ? m.b : m.a))}${fin && r.winner === (k ? m.b : m.a) ? ' 🏆' : ''}${coins ? `<br><small class="b3-gw">buah tinggal · menang <b>${gw[k]}</b></small>` : ''}</span><b>${big[k]}</b></div>`;
     const cn = fin ? '' : `<i class="b3-coin ${ca} qa"></i><i class="b3-coin ${cb} qb"></i>`;
+    const SR = seatRing(t, m);
+    if (SR) {   // susunan duduk: nombor giliran game semasa + siapa pukul dahulu
+      const st = gk % 4, ord = p => (SR.ring.indexOf(p) - st + 4) % 4 + 1, col = p => (p === 'bt' || p === 't' ? ca : cb);
+      const nn = p => `<div class="q-n ${p}"><span><i class="q-coin ${col(p)}"></i>${fin ? '' : `<em class="q-ord">${ord(p)}</em>`}${esc(SR.pos[p])}</span>${!fin && ord(p) === 1 ? '<small>pukul dahulu</small>' : ''}</div>`;
+      return `${sc(0, ca)}<div class="q-g">${nn('t')}${nn('l')}${brd(cn)}${nn('r')}${nn('bt')}</div>${sc(1, cb)}`;
+    }
     return `${sc(0, ca)}<div class="q-g">${nm(q[0][1], ca, 't')}${nm(q[1][0], cb, 'l', wa === 'b')}${brd(cn)}${nm(q[1][1], cb, 'r')}${nm(q[0][0], ca, 'bt', wa === 'a')}</div>${sc(1, cb)}`;
   }
   return `${side('a', 0)}<div class="b3-b"><i class="pk p1"></i><i class="pk p2"></i><i class="pk p3"></i><i class="pk p4"></i><div class="b3-p"><i class="bl l"></i><i class="bl r"></i><i class="bl t"></i><i class="bl b"></i><i class="b3-c"></i>${fin ? '' : coin('a') + coin('b')}</div></div>${side('b', 1)}`;

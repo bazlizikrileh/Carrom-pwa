@@ -1142,3 +1142,11 @@ body.tv .as-bar { display:none; }
 .gp-help { margin:4px 0 6px; font-size:14px; }
 .gp-bkt { margin:0 0 6px; font-size:13px; }
 .gp-wrap:not(.bk-on) .g-bk { display:none; }
+/* 🎯 Siapa mula & susunan duduk */
+.seat-card summary { font-weight:700; cursor:pointer; }
+.srv-row { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:8px 0 0; }
+.srv-row > span { flex:1 0 100%; font-size:12.5px; font-weight:700; color: var(--muted); }
+.seat-prev { margin-top:10px; }
+.seat-prev .b3.quad { --S: min(120px, 32vw); }
+.q-ord { display:inline-grid; place-items:center; width:1.35em; height:1.35em; border-radius:50%; background:#b45309; color:#fff; font-style:normal; font-size:.78em; font-weight:900; flex:none; }
+.tv-cr .tvb .q-ord { background:#ffb02e; color:#2a1407; }
