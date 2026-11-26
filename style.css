@@ -1150,3 +1150,9 @@ body.tv .as-bar { display:none; }
 .seat-prev .b3.quad { --S: min(120px, 32vw); }
 .q-ord { display:inline-grid; place-items:center; width:1.35em; height:1.35em; border-radius:50%; background:#b45309; color:#fff; font-style:normal; font-size:.78em; font-weight:900; flex:none; }
 .tv-cr .tvb .q-ord { background:#ffb02e; color:#2a1407; }
+.tv-cr .tvb .q-ord { font-size:.7em; }
+.tv-cr .tvb .q-n span { gap: .25em; }
+@container (max-aspect-ratio: 1/1) { .tv-cr .b3.quad.tvb { --S: min(44cqw, 31cqh); } }
+.tv-cr .tvb .q-n { max-width:100%; overflow:hidden; }
+.tv-cr .tvb .q-n span { flex-wrap:wrap; justify-content:center; overflow-wrap:anywhere; }
+.tv-cr .tvb .q-n.l span, .tv-cr .tvb .q-n.r span { text-align:center; }
