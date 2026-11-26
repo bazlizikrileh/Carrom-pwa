@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.17.1';
+const VERSION = 'C1.17.2';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -392,6 +392,7 @@ function bannerImg(t, photoOnly = false) {
   return `img/${L[Math.abs(h) % L.length]}.webp`;
 }
 function renderHead(t, page) {
+  if (canAdmin(t) && E.refreshCross(t)) { save(t); toast('Bracket kalah mati dikemas kini: A-C, B-D (silang)', 4000); }
   { const old = ls.get('carrom:posterLock:' + t.id); if (old && !t.posterStyle && canAdmin(t)) { t.posterStyle = old; ls.set('carrom:posterLock:' + t.id, null); save(t); } }
   clearInterval(_cdTimer);
   _cdTimer = setInterval(() => { const el = document.getElementById('cdown'); if (!el) return clearInterval(_cdTimer); if (startAt(t) <= Date.now()) { clearInterval(_cdTimer); renderHead(t, page); } else el.innerHTML = cdText(t); }, 1000);
@@ -661,7 +662,7 @@ function settingsFormAll(t, locked) {
         <div><label>Saiz kumpulan</label><select name="groupSize" ${dis}>${opt({ 3: 'Maks. 3', 4: 'Maks. 4', 5: 'Maks. 5', 6: 'Maks. 6' }, t.groupSize)}</select></div>
         <div><label>Bilangan kumpulan</label><select name="numGroups" ${dis}>${opt({ 0: 'Auto (ikut saiz)', ...Object.fromEntries(Array.from({ length: 23 }, (_, i) => [i + 2, String(i + 2)])) }, t.numGroups)}</select></div>
         <div><label>Tempat ke-3 terbaik layak</label><select name="bestThirds" ${dis}>${opt({ 0: 'Tiada', 2: '2 terbaik', 4: '4 terbaik', 6: '6 terbaik', 8: '8 terbaik', 12: '12 terbaik', 16: '16 terbaik' }, t.bestThirds)}</select></div>
-        <div><label>Susunan kalah mati</label><select name="koMode">${opt({ M: 'Cermin (automatik)', U: 'Undian' }, t.koMode)}</select></div>
+        <div><label>Susunan kalah mati</label><select name="koMode">${opt({ M: 'Silang automatik (A-C, B-D)', U: 'Undian' }, t.koMode)}</select></div>
         <div><label>Peserta pool kalah</label><select name="pool">${opt(POOL, t.pool)}</select></div>
         <div><label>Susunan pool kalah</label><select name="poolMode">${opt({ M: 'Cermin (automatik)', U: 'Undian' }, t.poolMode)}</select></div>
       </div>
@@ -1663,7 +1664,7 @@ function viewBrackets(t) {
     const mirror = t.koMode !== 'U' && E.canMirror(t);
     $app.innerHTML = `${section('Kalah mati', 'Carta Kalah Mati')}<div class="card">
       ${ready ? '<p>Semua perlawanan kumpulan selesai.</p>' : '<p class="muted">Masih ada perlawanan kumpulan belum selesai.</p>'}
-      <p class="muted small">${mirror ? 'Bracket cermin: johan kumpulan berselang-seli bahagian atas/bawah (A atas, B bawah, C atas …), setiap johan lwn naib johan kumpulan cermin. A1 &amp; B1 hanya boleh bertemu di final.' : 'Undian: BYE kepada johan kumpulan terbaik; rakan sekumpulan diletak di separuh bracket berlainan.'}${t.pool !== '0' ? ' Pool kalah: ' + POOL[t.pool].toLowerCase() + '.' : ''}</p>
+      <p class="muted small">${mirror ? `Bracket silang: kumpulan separuh pertama lwn separuh kedua (${t.groups.length === 4 ? 'A1-C2, B2-D1 | B1-D2, A2-C1' : t.groups.length === 8 ? 'A-E, B-F, C-G, D-H' : 'A-B'}). Rakan sekumpulan berada di separuh bracket berlainan, jadi hanya boleh bertemu di final.` : 'Undian: BYE kepada johan kumpulan terbaik; rakan sekumpulan diletak di separuh bracket berlainan.'}${t.pool !== '0' ? ' Pool kalah: ' + POOL[t.pool].toLowerCase() + '.' : ''}</p>
       <button class="pill-btn ${ready ? 'brand' : 'light'}" id="gen"><span class="dot"></span>${ready ? 'Jana kalah mati' : 'Jana sekarang (ikut kedudukan semasa)'}</button></div>`;
     document.getElementById('gen').onclick = () => {
       if (!ready && !confirm('Masih ada perlawanan kumpulan belum selesai. Teruskan?')) return;
@@ -1752,7 +1753,7 @@ function rulesOf(t) {
   else {
     rules.push(`Format perlawanan - peringkat kumpulan: ${gf}; kalah mati: ${kf}.`);
     rules.push(t.koMode !== 'U' && E.canMirror(t)
-      ? 'Kalah mati (bracket cermin): johan setiap kumpulan menentang naib johan kumpulan cermin (A1 lwn naib johan kumpulan terakhir, B1 lwn kumpulan kedua terakhir, dan seterusnya). Johan kumpulan diletak berselang-seli di bahagian atas dan bawah (A atas, B bawah, C atas …), jadi A1 dan B1 hanya boleh bertemu di final. Johan dan naib johan dari kumpulan yang sama sentiasa berada di bahagian bracket berbeza.'
+      ? `Kalah mati (bracket silang): kumpulan separuh pertama menentang kumpulan separuh kedua — johan lwn naib johan (${t.groups.length === 4 ? 'A1 lwn C2, B2 lwn D1, B1 lwn D2, A2 lwn C1' : t.groups.length === 8 ? 'A lwn E, B lwn F, C lwn G, D lwn H' : 'A1 lwn B2, B1 lwn A2'}). Johan dan naib johan dari kumpulan yang sama sentiasa berada di separuh bracket berbeza, jadi hanya boleh bertemu di final.`
       : `Kalah mati: BYE diberi kepada johan kumpulan terbaik (ikut mata, kemudian beza menang-kalah perlawanan dan game). Johan dan naib johan dari kumpulan yang sama diletakkan di separuh bracket berbeza.${t.bestThirds ? ` ${t.bestThirds} tempat ketiga terbaik turut layak.` : ''} Jika saiz kumpulan tidak sama, perbandingan antara kumpulan tidak mengambil kira keputusan menentang pemain tempat terakhir kumpulan yang lebih besar.`);
     if (t.pool !== '0') rules.push(`Pool kalah: ${t.pool === '34' ? 'peserta tempat ketiga yang tidak layak ke kalah mati utama dan semua peserta tempat keempat' : 'peserta tempat ketiga yang tidak layak ke kalah mati utama'} bermain kalah mati berasingan menggunakan format kalah mati yang sama. BYE (jika ada) diberi kepada peserta terbaik.`);
   }

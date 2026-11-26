@@ -521,16 +521,26 @@ export const byeReceivers = (t, entrants) => {
   return tiers.flat().slice(0, byes).map(e => e.id);
 };
 
-// Cermin: johan kumpulan berselang-seli bahagian atas/bawah (A atas, B bawah, C atas …), setiap johan lwn naib johan kumpulan cermin.
+// (altOrder kini hanya untuk pool tempat ketiga; bracket utama guna crossSlots)
 // 8 kumpulan → atas: A1–H2, C1–F2, E1–D2, G1–B2 · bawah: B1–G2, D1–E2, F1–C2, H1–A2. A1 & B1 (dan A1 & A2) hanya bertemu di final.
 const altOrder = n => [...Array.from({ length: n }, (_, i) => i).filter(i => i % 2 === 0), ...Array.from({ length: n }, (_, i) => i).filter(i => i % 2 === 1)];
+// Bracket silang: kumpulan separuh pertama lwn separuh kedua (4 kumpulan: A1-C2, B2-D1 | B1-D2, A2-C1;
+// 8 kumpulan: A-E, B-F, C-G, D-H). Rakan sekumpulan diletak di separuh bracket berlainan (hanya bertemu di final).
+export function crossSlots(G, r1, r2) {
+  const h = G.length / 2, top = [], bot = [];
+  for (let i = 0; i < h; i++) {
+    const X = [`P:${G[i].name}:${r1}`, `P:${G[i + h].name}:${r2}`], Y = [`P:${G[i + h].name}:${r1}`, `P:${G[i].name}:${r2}`];
+    top.push(i % 2 === 0 ? X : Y); bot.push(i % 2 === 0 ? Y : X);
+  }
+  return [...top, ...bot.reverse()].flat();
+}
 export function mainSlots(t) {
   if (t.format === 'ko') {
     const ids = shuffle(t.participants.map(p => p.id));
     return bracketOrder(nextPow2(ids.length)).map(s => ids[s - 1] || 'BYE');
   }
   const G = t.groups;
-  if (t.koMode !== 'U' && canMirror(t)) return altOrder(G.length).flatMap(i => [`P:${G[i].name}:1`, `P:${G[G.length - 1 - i].name}:2`]);
+  if (t.koMode !== 'U' && canMirror(t)) return crossSlots(G, 1, 2);
   return drawBracket(t, koQualifiers(t));
 }
 
@@ -544,7 +554,7 @@ export function poolSlots(t) {
   if (ent.length < 2) return null;
   if (t.poolMode !== 'U' && canMirror(t)) {
     if (t.pool === '3' && full(3)) return altOrder(G.length / 2).flatMap(i => [`P:${G[i].name}:3`, `P:${G[G.length - 1 - i].name}:3`]);
-    if (t.pool === '34' && full(4)) return altOrder(G.length).flatMap(i => [`P:${G[i].name}:3`, `P:${G[G.length - 1 - i].name}:4`]);
+    if (t.pool === '34' && full(4)) return crossSlots(G, 3, 4);
   }
   return drawBracket(t, ent);
 }
@@ -939,6 +949,19 @@ export function resolvePlaceholders(t) {
 }
 // Bracket cermin dijana bersama jadual kumpulan (pemegang tempat), supaya kalah mati boleh bermula
 // sebaik kedudukan pasti diketahui.
+// Pertandingan lama (bracket cermin lama): tukar kepada bracket silang jika kalah mati belum bermula
+export function refreshCross(t) {
+  if (t.format !== 'group_ko' || t.koMode === 'U' || !canMirror(t) || !t.rounds || !t.rounds.ko) return false;
+  const ko = t.matches.filter(m => m.bracket === 'ko');
+  if (ko.some(m => m.status === 'done' || m.lt || (m.rubbers || []).some(r => (r.sets || []).length))) return false;
+  const want = crossSlots(t.groups, 1, 2), r1 = ko.filter(m => m.round === 1).sort((x, y) => x.slot - y.slot);
+  const have = r1.flatMap(m => [m.srcA || m.a, m.srcB || m.b]);
+  if (!have.every(x => typeof x === 'string' && x.startsWith('P:')) || have.join() === want.join()) return false;
+  buildBracket(t, 'ko', want);
+  if (poolMirror(t) && t.pool === '34' && !t.matches.some(m => m.bracket === 'pool' && (m.status === 'done' || m.lt))) buildBracket(t, 'pool', poolSlots(t));
+  numberKO(t); planSchedule(t);
+  return true;
+}
 export function earlyBracket(t) {
   if (t.format !== 'group_ko' || t.koMode === 'U' || !canMirror(t)) return false;
   buildBracket(t, 'ko', mainSlots(t));
