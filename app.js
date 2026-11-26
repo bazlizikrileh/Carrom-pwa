@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.17.2';
+const VERSION = 'C1.17.3';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -1370,6 +1370,7 @@ function viewMatch(t, mid) {
     if (m.status === 'done' || !store.isCloud(t.id)) return;
     const rs = clean(read()); let ri = rs.findIndex(sets => !lsRubberDone(t, m, sets)); if (ri < 0) ri = rs.length - 1;
     clearTimeout(_lsTimer);
+    if (!rs.some(x => x.length)) { dropLive(t, m.id); return; }   // semua game dikosongkan → buang skor langsung
     _lsTimer = setTimeout(async () => {
       try {
         if (!edit) {   // pengadil: tuntut kebenaran penjaga skor dengan PIN acara (sekali sahaja)
@@ -1422,7 +1423,7 @@ function viewMatch(t, mid) {
     if (lu && ((lu.ad1 && lu.ad1 === lu.ad2) || (lu.bd1 && lu.bd1 === lu.bd2))) return toast('Regu mesti dua pemain berbeza');
     E.recordScore(t, m.id, read(), { lineup: lu, override });
     E.planSchedule(t); LV.afterScore(t);
-    save(t); ls.set(dkey, null); ls.set('carrom:sent:' + m.id, null);
+    save(t); ls.set(dkey, null); ls.set('carrom:sent:' + m.id, null); dropLive(t, m.id);
     const r = E.evaluateMatch(t, m);
     vib([30, 60, 30]); toast(m.status === 'done' ? (r.draw ? 'Disimpan · Seri' : `Disimpan · ${E.pname(t, m.winner)} menang`) : 'Disimpan (belum tamat)');
     location.hash = `#/t/${t.id}/${_back}`;
@@ -1442,7 +1443,7 @@ function viewMatch(t, mid) {
   const cl = document.getElementById('clear');
   if (cl) cl.onclick = () => {
     if (!confirm('Kosongkan skor perlawanan ini?')) return;
-    ls.set(dkey, null);
+    ls.set(dkey, null); dropLive(t, m.id);
     E.recordScore(t, m.id, m.rubbers.map(() => []), { override: null }); E.planSchedule(t); save(t); viewMatch(t, mid);
   };
 }
@@ -2646,6 +2647,16 @@ function liveOf(t, m, id = m.id) {
   return x && m.status !== 'done' && Date.now() - x.at < LS_FRESH ? x : null;
 }
 // Pertandingan di telefon ini sahaja: pilihan pemenang game (draf) dipapar terus di Langsung & Mod TV
+// Buang skor langsung perlawanan (awan + Jaga skor/draf di telefon ini)
+function dropLive(t, mid) {
+  const base = String(mid).split('~')[0];
+  for (const k of Object.keys(localStorage)) if (k.startsWith('carrom:ls:' + base) || k === 'carrom:draft:' + base) { try { localStorage.removeItem(k); } catch {} }
+  if (store.isCloud(t.id)) {
+    const L = (cloud.state.live || {})[t.id] || {};
+    for (const id of Object.keys(L)) if (id === base || id.startsWith(base + '~')) cloud.clearLive(t.id, id).catch(() => {});
+    if (!L[base]) cloud.clearLive(t.id, base).catch(() => {});
+  }
+}
 function draftLive(t, m) {
   if (!m || m.status === 'done') return null;
   let S = null; try { S = JSON.parse(ls.get('carrom:ls:' + m.id) || 'null'); } catch {}
@@ -3821,6 +3832,7 @@ function wireTestTools(t) {
     t.matches = t.matches.filter(m => m.stage === 'group');
     t.matches.forEach(m => { m.rubbers.forEach(r => (r.sets = [])); m.winner = null; m.override = null; m.lt = 0; m.tg = 0; m.ump = undefined; delete m.xt; if (m.status !== 'bye') m.status = 'pending'; });
     t.rounds = {}; t.stage = t.groups.length ? 'group' : 'setup';
+    t.matches.forEach(m => dropLive(t, m.id)); Object.keys((cloud.state.live || {})[t.id] || {}).forEach(id => dropLive(t, id));
     E.earlyBracket(t); E.planSchedule(t); save(t); toast('Semua skor dikosongkan'); render(true);
   });
 }
