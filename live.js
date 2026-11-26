@@ -174,6 +174,7 @@ export function mixRestOf(t, s, U) {
   return (t.individuals || []).map(x => x.id).filter(id => !busy.has(id));
 }
 export function umpirePlan(t) {
+  if (t.noUmp) return {};   // tiada pengadil: pemain isi keputusan sendiri
   if (t.entryMode === 'mixer') return mixUmpPlan(t);
   const o = {};
   t.groups.forEach(g => {
@@ -188,6 +189,7 @@ export function umpirePlan(t) {
   return o;
 }
 export function umpireOf(t, m, U) {
+  if (t.noUmp) return '';
   if (!m || m.stage !== 'group') return '';
   if (m.lt && m.ump) return m.ump;
   if (m.lt && m.ump !== undefined && t.entryMode !== 'mixer') return '';

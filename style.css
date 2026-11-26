@@ -1138,3 +1138,7 @@ body.tv .as-bar { display:none; }
 .b3:not(.tvb), .b3:not(.tvb) .b3-nm, .b3:not(.tvb) .q-n, .b3:not(.tvb) .q-sc span { color:#2a1407; }
 .b3:not(.tvb) .b3-tag, .b3:not(.tvb) .q-sc small, .b3:not(.tvb) .b3-gw { color:#6b3f17; }
 .b3:not(.tvb) .q-n small, .b3:not(.tvb) .b3-tag b { color:#b45309; }
+/* Isi keputusan (mod mudah): baki tersembunyi kecuali ➕ Catat baki */
+.gp-help { margin:4px 0 6px; font-size:14px; }
+.gp-bkt { margin:0 0 6px; font-size:13px; }
+.gp-wrap:not(.bk-on) .g-bk { display:none; }
