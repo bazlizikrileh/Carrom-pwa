@@ -1,6 +1,9 @@
 // Video cabutan (MP4) untuk dikongsi ke WhatsApp — dilukis pada kanvas & dikod dalam telefon.
 // Utama: WebCodecs (H.264) + mp4-muxer (lebih laju dari masa nyata). Sandaran: MediaRecorder.
 const W = 720, H = 1280;
+// Papan status dikecilkan (skala SB) supaya kotak kumpulan/regu mendapat lebih ruang & tulisan lebih besar
+const SB = 0.7, SB_Y = 128, BOX_TOP = SB_Y + Math.round(270 * SB) + 16;
+const sbY = y => SB_Y + (y - 176) * SB;   // kedudukan y lama (papan 176–446) → baharu
 const scaleFor = o => (duration(o) > 40 ? 0.75 : 1); // video panjang: 540×960 (lebih ringan)
 const fpsFor = o => (duration(o) > 40 ? 20 : 30); // video panjang: kurang bingkai supaya telefon tidak berat
 const T_STD = { INTRO: 2.2, SHUF: 1.4, STEP: 0.75, FLY: 0.45, OUTRO: 3 }, T_FAST = { INTRO: 1.4, SHUF: 0.8, STEP: 0.45, FLY: 0.3, OUTRO: 2.2 };
@@ -32,15 +35,15 @@ function fitText0(c, s, maxW, size, weight = 700, min = 12) {
 export function duration(o) { if (o.custom) return o.custom.dur; if (o.end) return o.dur || 4; if (o.scenes) return o.scenes.reduce((a, x) => a + duration(x), 0); const { INTRO, SHUF, STEP, OUTRO } = TM(o); return INTRO + SHUF + o.seq.length * STEP + OUTRO; }
 
 function layout(o) {
-  const n = o.boxes.length, cols = n <= 2 ? n : n <= 6 ? 2 : n <= 12 ? 3 : 4;
-  const rows = Math.ceil(n / cols), top = 470, bottom = H - (o.sceneTotal > 1 ? 122 : 70), gap = 14, pad = 34;
+  const n = o.boxes.length, cols = n <= 2 ? n : n <= 8 ? 2 : n <= 18 ? 3 : 4;
+  const rows = Math.ceil(n / cols), top = BOX_TOP, bottom = H - (o.sceneTotal > 1 ? 122 : 70), gap = 14, pad = 34;
   const bw = (W - pad * 2 - gap * (cols - 1)) / cols;
   const maxSlots = Math.max(...o.boxes.map(b => b.slots + (b.vs ? 0.5 : 0)));
-  const bh = Math.min((bottom - top - gap * (rows - 1)) / rows, 54 + maxSlots * 62);
+  const bh = Math.min((bottom - top - gap * (rows - 1)) / rows, 60 + maxSlots * 84);
   const used = rows * bh + gap * (rows - 1), y0 = top + Math.max(0, (bottom - top - used) / 2);
   return o.boxes.map((b, i) => {
     const x = pad + (i % cols) * (bw + gap), y = y0 + Math.floor(i / cols) * (bh + gap);
-    const lh = Math.min(40, bh * .28), sh = (bh - lh - 10 - (b.vs ? 18 : 0)) / b.slots;
+    const lh = Math.min(44, bh * .3), sh = (bh - lh - 10 - (b.vs ? 18 : 0)) / b.slots;
     const va = Math.max(1, Math.floor(b.slots / 2));
     const slots = Array.from({ length: b.slots }, (_, k) => ({ x: x + 8, y: y + lh + 4 + k * sh + (b.vs && k >= va ? 18 : 0), w: bw - 16, h: sh - 6 }));
     return { x, y, w: bw, h: bh, lh, slots, vsY: b.vs ? y + lh + 4 + va * sh - 2 : 0 };
@@ -71,12 +74,13 @@ function makeDrawer(o, logos, cv, sc = 1) {
       c.strokeStyle = 'rgba(255,255,255,.08)'; c.lineWidth = 2; c.beginPath(); c.arc(bx, by, r * .62, 0, 7); c.stroke(); }
     // kepala
     let lx = 40;
-    logos.forEach(im => { if (!im) return; const h = 92, w = h * im.width / im.height; c.drawImage(im, lx, 44, w, h); lx += w + 10; });
+    logos.forEach(im => { if (!im) return; const h = 70, w = h * im.width / im.height; c.drawImage(im, lx, 34, w, h); lx += w + 10; });
     c.fillStyle = '#fff'; c.textBaseline = 'alphabetic';
     const tx = lx + 8, tw = W - tx - 40;
-    c.fillText(fitText(c, o.title, tw, 40, 800), tx, 92);
-    c.fillStyle = 'rgba(255,255,255,.75)'; c.fillText(fitText(c, o.subtitle || '', tw, 24, 500), tx, 128);
-    // papan status
+    c.fillText(fitText(c, o.title, tw, 36, 800), tx, 70);
+    c.fillStyle = 'rgba(255,255,255,.75)'; c.fillText(fitText(c, o.subtitle || '', tw, 22, 500), tx, 100);
+    // papan status (dilukis pada skala SB)
+    c.save(); c.translate(W / 2 * (1 - SB), SB_Y - 176 * SB); c.scale(SB, SB);
     c.fillStyle = 'rgba(4,8,20,.55)'; rr(c, 34, 176, W - 68, 270, 24); c.fill();
     const k = Math.floor((t - T0) / STEP), cur = t >= T0 && k < dest.length ? dest[k] : null;
     c.textAlign = 'center';
@@ -114,13 +118,14 @@ function makeDrawer(o, logos, cv, sc = 1) {
       c.fillStyle = 'rgba(255,255,255,.8)'; c.fillText(fitText(c, 'Semoga berjaya kepada semua peserta!', W - 120, 26, 600), W / 2, 360);
     }
     c.textAlign = 'left';
+    c.restore();
     // kotak
     const shown = t < T0 ? 0 : Math.min(dest.length, Math.floor((t - T0) / STEP) + 1);
     o.boxes.forEach((b, i) => {
       const B = L[i], hot = cur && cur.box === i;
       c.fillStyle = '#fff'; rr(c, B.x, B.y, B.w, B.h, 16); c.fill();
       if (hot) { c.strokeStyle = or; c.lineWidth = 5; rr(c, B.x, B.y, B.w, B.h, 16); c.stroke(); }
-      c.fillStyle = '#0f172a'; c.fillText(fitText(c, b.label, B.w - 24, Math.min(26, B.lh * .7), 800), B.x + 12, B.y + B.lh * .78);
+      c.fillStyle = '#0f172a'; c.fillText(fitText(c, b.label, B.w - 24, Math.min(30, B.lh * .72), 800), B.x + 12, B.y + B.lh * .78);
       if (b.vs) { c.fillStyle = '#94a3b8'; c.textAlign = 'center'; c.fillText(fitText(c, 'lwn', 60, 15, 700), B.x + B.w / 2, B.vsY + 12); c.textAlign = 'left'; }
       B.slots.forEach((S, si) => { c.strokeStyle = '#cbd5e1'; c.setLineDash([6, 5]); c.lineWidth = 2; rr(c, S.x, S.y, S.w, S.h, 10); c.stroke(); c.setLineDash([]);
         if (b.slotLabels && b.slotLabels[si]) { c.fillStyle = '#94a3b8'; c.fillText(fitText(c, b.slotLabels[si], S.w - 20, Math.min(20, S.h * .45), 600), S.x + 10, S.y + S.h * .65); } });
@@ -129,13 +134,13 @@ function makeDrawer(o, logos, cv, sc = 1) {
       const d = dest[j], S = L[d.box].slots[d.slot];
       if (!S) continue;
       const p = j === shown - 1 && cur ? ease((t - T0 - j * STEP) / FLY) : 1;
-      const sx = W / 2 - S.w / 2, sy = 270;
+      const sx = W / 2 - S.w / 2, sy = sbY(270);
       const x = sx + (S.x - sx) * p, y = sy + (S.y - sy) * p, sc = 1.25 - .25 * p;
       c.save(); c.translate(x + S.w / 2, y + S.h / 2); c.scale(sc, sc);
       c.fillStyle = j === shown - 1 && cur ? or : '#e2e8f0'; rr(c, -S.w / 2, -S.h / 2, S.w, S.h, 10); c.fill();
       c.fillStyle = j === shown - 1 && cur ? '#fff' : '#0f172a';
-      const sl = (o.boxes[d.box].slotLabels || [])[d.slot];
-      c.fillText(fitText(c, (sl ? sl + ' · ' : '') + d.name, S.w - 20, Math.min(26, S.h * .55), 700), -S.w / 2 + 10, S.h * .2);
+      const sl = (o.boxes[d.box].slotLabels || [])[d.slot], pre = sl && sl.length <= 3 ? sl + ' · ' : '';   // "A1 ·" dikekalkan; "Pemain 1" tidak (beri ruang kepada nama)
+      c.fillText(fitText(c, pre + d.name, S.w - 20, Math.min(32, S.h * .6), 700, 14), -S.w / 2 + 10, S.h * .2);
       c.restore();
     }
     // konfeti bila sesi selesai
@@ -143,7 +148,7 @@ function makeDrawer(o, logos, cv, sc = 1) {
     if (t >= tDone && !cur) {
       const td = t - tDone, cols = ['#ffb02e', '#ff7a1a', '#7ee2a0', '#60a5fa', '#f472b6', '#fff'];
       for (let i = 0; i < 46; i++) {
-        const a = (i * 2.399) % 6.283, v = 260 + (i * 37) % 220, x = W / 2 + Math.cos(a) * v * td, y = 300 + Math.sin(a) * v * td * 0.8 + 420 * td * td;
+        const a = (i * 2.399) % 6.283, v = 260 + (i * 37) % 220, x = W / 2 + Math.cos(a) * v * td, y = sbY(300) + Math.sin(a) * v * td * 0.8 + 420 * td * td;
         if (y > H) continue;
         c.save(); c.translate(x, y); c.rotate(td * 8 + i); c.globalAlpha = Math.max(0, 1 - td / 1.6); c.fillStyle = cols[i % cols.length]; c.fillRect(-6, -3, 12, 6); c.restore();
       }
@@ -383,3 +388,5 @@ export async function prepareDrawVideo(o, onP) {
 
 // Alat lukisan dikongsi dengan video ringkasan pertandingan
 export const VID = { W, H, rr, fitText, ease, css };
+// Bingkai pratonton (untuk ujian / pratonton): lukis masa t dan pulangkan kanvas
+export async function frameAt(o, t) { const logos = await Promise.all((o.logos || []).map(loadImg)); const D = o.scenes ? makeSceneDrawer(o, logos, 1) : makeDrawer(o, logos, null, 1); D.draw(t); return D.cv; }

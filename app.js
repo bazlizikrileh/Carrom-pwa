@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.19.2';
+const VERSION = 'C1.19.3';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
