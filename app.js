@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.19.5';
+const VERSION = 'C1.19.6';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -918,7 +918,7 @@ function viewSetupCore(t, part = 'tetapan') {
   const hc = document.getElementById('hideChk');
   if (hc) hc.onchange = () => { t.hidden = hc.checked; save(t); toast(hc.checked ? '🙈 Disembunyikan dari senarai awam' : '👁 Dipaparkan dalam senarai awam'); };
   if (f) wireForm(f);
-  if (f) f.onsubmit = async e => { e.preventDefault(); const was = t.entryMode; readSettings(f, t); await readLogo(f, t); const msg = E.switchEntry(t, was); save(t); toast(msg || 'Tetapan disimpan', msg ? 6000 : 2600); render(); };
+  if (f) f.onsubmit = async e => { e.preventDefault(); const was = t.entryMode; await takeSponsor(t); readSettings(f, t); await readLogo(f, t); const msg = E.switchEntry(t, was); save(t); toast(msg || 'Tetapan disimpan', msg ? 6000 : 2600); render(); };
   if (!locked && f) ['entryMode', 'teamSize'].forEach(n => f[n] && f[n].addEventListener('change', () => {
     const was = t.entryMode, wasSz = t.teamSize; readSettings(f, t);
     const msg = E.switchEntry(t, was, wasSz); save(t); if (msg) toast(msg, 6000); render();
@@ -2540,27 +2540,38 @@ function extrasCard(t) {
     ${sp.length ? `<div class="sp-list">${sp.map((x, i) => `<div class="sp-item">${x.logo ? `<img src="${x.logo}" alt="">` : ''}<span>${esc(x.name)}</span><button type="button" class="pill-btn light small" data-spdel="${i}">✕</button></div>`).join('')}</div>` : '<p class="muted small">Belum ada penaja.</p>'}
     <div class="grid2"><div><label>Nama penaja</label><input id="spName" maxlength="40" placeholder="cth. Klinik Pergigian ABC"></div>
       <div><label>Logo (pilihan)</label><input id="spLogo" type="file" accept="image/*"></div></div>
-    <button type="button" class="pill-btn light small" id="spAdd" style="margin-top:8px">➕ Tambah penaja</button>
+    <button type="button" class="pill-btn brand" id="spAdd" style="margin-top:8px"><span class="dot"></span>💾 Simpan penaja</button>
+    <p class="muted small" style="margin:4px 0 0">Isi nama dan/atau pilih logo, kemudian tekan <b>Simpan penaja</b>. Ulang untuk penaja seterusnya (maks. 8).</p>
     <div class="rule" style="margin:16px 0 10px"></div>
     <div class="section-title" style="margin-top:0">📎 Lampiran</div>
     <p class="muted small" style="margin-top:0">Pautan kepada kertas kerja, peraturan, peta lokasi dan sebagainya (contoh pautan Google Drive yang dikongsi).</p>
     ${at.length ? `<div class="sp-list">${at.map((x, i) => `<div class="sp-item"><span>📎 ${esc(x.name)}</span><button type="button" class="pill-btn light small" data-atdel="${i}">✕</button></div>`).join('')}</div>` : ''}
     <div class="grid2"><div><label>Nama</label><input id="atName" maxlength="40" placeholder="cth. Kertas kerja"></div>
       <div><label>Pautan (https://…)</label><input id="atUrl" type="url" placeholder="https://drive.google.com/…"></div></div>
-    <button type="button" class="pill-btn light small" id="atAdd" style="margin-top:8px">➕ Tambah lampiran</button>
+    <button type="button" class="pill-btn brand" id="atAdd" style="margin-top:8px"><span class="dot"></span>💾 Simpan lampiran</button>
   </details>`;
+}
+// Ambil penaja yang ditaip/dipilih (belum ditambah) → masukkan ke t.sponsors. Dipanggil oleh butang
+// Tambah penaja dan juga Simpan tetapan, supaya penaja tidak hilang jika pengguna terus tekan Simpan.
+async function takeSponsor(t) {
+  const g = id => document.getElementById(id);
+  if (!g('spName')) return 'empty';
+  const name = g('spName').value.trim(), f = g('spLogo').files[0];
+  if (!name && !f) return 'empty';
+  if ((t.sponsors || []).length >= 8) { toast('Maksimum 8 penaja'); return 'err'; }
+  let logo = ''; try { if (f) logo = await shrinkLogo(f); } catch { toast('Logo tidak dapat dibaca'); return 'err'; }
+  t.sponsors = [...(t.sponsors || []), { name: name || 'Penaja', logo }]; if (t.sponsors.length === 1) t.sponsorOn = true;
+  g('spName').value = ''; g('spLogo').value = '';
+  return 'ok';
 }
 function wireExtras(t) {
   const g = id => document.getElementById(id);
   if (!g('spAdd')) return;
   g('spOn').onchange = e => { t.sponsorOn = e.target.checked; save(t); toast(t.sponsorOn ? 'Penaja dipaparkan' : 'Penaja disembunyikan'); };
   g('spAdd').onclick = async () => {
-    const name = g('spName').value.trim(), f = g('spLogo').files[0];
-    if (!name && !f) return toast('Isi nama atau pilih logo penaja');
-    if ((t.sponsors || []).length >= 8) return toast('Maksimum 8 penaja');
-    let logo = ''; try { if (f) logo = await shrinkLogo(f); } catch { return toast('Logo tidak dapat dibaca'); }
-    t.sponsors = [...(t.sponsors || []), { name: name || 'Penaja', logo }]; if (t.sponsors.length === 1) t.sponsorOn = true;
-    save(t); toast('Penaja ditambah'); render();
+    const r = await takeSponsor(t);
+    if (r === 'empty') return toast('Isi nama atau pilih logo penaja');
+    if (r === 'ok') { save(t); toast('✅ Penaja disimpan'); render(); }
   };
   $app.querySelectorAll('[data-spdel]').forEach(b => (b.onclick = () => { t.sponsors.splice(+b.dataset.spdel, 1); save(t); render(); }));
   g('atAdd').onclick = () => {
