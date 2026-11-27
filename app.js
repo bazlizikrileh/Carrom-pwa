@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.19.7';
+const VERSION = 'C1.19.8';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -348,7 +348,8 @@ function render(keep = false) {
     if (store.isCloud(t.id) && canEdit(t)) cloud.watchSubmissions(t.id);
     _cur = t.id;
     applyTheme(t);
-    const page = parts[2] || defaultPage(t);
+    let page = parts[2] || defaultPage(t);
+    if (page === 'kumpulan' && t.format === 'ko' && !t.groups.length) page = 'kalahmati';   // kalah mati sahaja: tiada kumpulan
     if (page === 'papan') { gotoTable(t, +parts[3]); return; }
     if (!['m', 'ls', 'kadskor', 'qr', 'status'].includes(page)) _back = page;
     renderHead(t, page);
@@ -419,11 +420,11 @@ function renderHead(t, page) {
   $head.style.backgroundSize = 'cover'; $head.style.backgroundPosition = 'center';
   const pw = UNIT(t) === 'Pemain' ? 'Pemain' : UNIT(t);
   const tabs = [...(canAdmin(t) ? [['tetapan', '⚙️', 'Tetapan']] : []), ['pemain', '👥', UNIT(t)], ['langsung', '🟢', 'Langsung'], ['jadual', '📋', 'Jadual'],
-    ['kumpulan', '📊', E.isMixer(t) ? 'Individu' : t.format === 'rr' ? 'Liga' : 'Kumpulan'], ['keputusan', '📝', 'Keputusan']];
+    ...(t.format === 'ko' && !t.groups.length ? [] : [['kumpulan', '📊', E.isMixer(t) ? 'Individu' : t.format === 'rr' ? 'Liga' : 'Kumpulan']]), ['keputusan', '📝', 'Keputusan']];
   if (t.format !== 'rr') tabs.push(['kalahmati', '⚔️', 'Knockout']);
   if ((t.format === 'group_ko' || t.format === 'ko') && t.pool && t.pool !== '0') tabs.push(['pool', '🥉', 'Pool']);
   tabs.push(['laporan', '🖨️', 'Laporan']);
-  const alias = { m: (t.matches.find(x => x.id === location.hash.split('/')[4]) || {}).stage === 'group' ? 'keputusan' : 'kalahmati', ranking: 'kalahmati', peraturan: 'pemain' };
+  const alias = { m: (t.matches.find(x => x.id === location.hash.split('/')[4]) || {}).stage === 'group' ? 'keputusan' : 'kalahmati', ranking: 'kalahmati', peraturan: 'pemain', ...(t.format === 'ko' && !t.groups.length ? { kumpulan: 'kalahmati' } : {}) };
   const cur = alias[page] || page;
   const half = Math.ceil(tabs.length / 2);
   const rows = tabs.length > 4 ? [tabs.slice(0, half), tabs.slice(half)] : [tabs];
