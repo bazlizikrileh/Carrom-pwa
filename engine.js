@@ -268,7 +268,7 @@ export function recordScore(t, matchId, rubberSets, extra = {}) {
   m.winner = r.winner;
   const any = m.rubbers.some(x => x.sets.length);
   m.status = (r.complete && (r.winner || r.draw)) ? 'done' : any ? 'live' : 'pending';
-  if (m.stage !== 'group') propagate(t, m.bracket);
+  if (m.stage !== 'group') { propagate(t, m.bracket); if (m.bracket === 'ko' && t.rounds.pool) resolvePlaceholders(t); }
   else resolvePlaceholders(t);
   updateStage(t);
   return m;
@@ -548,7 +548,11 @@ export const poolMirror = t => {
   const G = t.groups, full = k => G.every(g => g.members.length >= k);
   return t.format === 'group_ko' && t.pool !== '0' && t.poolMode !== 'U' && canMirror(t) && (t.pool === '3' ? full(3) : full(4));
 };
+// Pool kalah untuk format kalah mati sahaja: yang kalah pusingan pertama (L:<kod>:<slot>)
+const koLoserSlots = t => t.matches.filter(m => m.bracket === 'ko' && m.round === 1).sort((x, y) => x.slot - y.slot)
+  .map(m => `L:${m.gn == null ? '' : 'G' + m.gn}:${m.slot}`);
 export function poolSlots(t) {
+  if (t.format === 'ko') return t.pool === 'L1' && t.rounds.ko ? koLoserSlots(t) : null;
   const G = t.groups, full = k => G.every(g => g.members.length >= k);
   const ent = poolMirror(t) ? [1, 2] : poolEntrants(t);
   if (ent.length < 2) return null;
@@ -568,7 +572,7 @@ export function buildBracket(t, bracket, slots) {
     for (let i = 0; i < count; i++) {
       const m = blankMatch(t, { stage: bracket, bracket, round: r, slot: i, a: null, b: null });
       if (r === 1) {
-        const isP = x => typeof x === 'string' && x.startsWith('P:');
+        const isP = x => typeof x === 'string' && (x.startsWith('P:') || x.startsWith('L:'));
         [['a', slots[2 * i]], ['b', slots[2 * i + 1]]].forEach(([s, v]) => { if (isP(v)) { m['src' + s.toUpperCase()] = v; m[s] = null; } else m[s] = v; });
       }
       list.push(m);
@@ -585,7 +589,8 @@ export function buildKO(t) {
   const slots = mainSlots(t);
   if (slots.filter(x => x !== 'BYE').length < 2) throw new Error('Perlu sekurang-kurangnya 2 peserta untuk kalah mati');
   buildBracket(t, 'ko', slots);
-  const ps = t.format === 'group_ko' ? poolSlots(t) : null;
+  if (t.format === 'ko' && t.pool === 'L1') numberKO(t);
+  const ps = t.format === 'group_ko' || t.format === 'ko' ? poolSlots(t) : null;
   if (ps) buildBracket(t, 'pool', ps); else { t.matches = t.matches.filter(m => m.bracket !== 'pool'); delete t.rounds.pool; }
   numberKO(t); planSchedule(t); updateStage(t);
 }
@@ -927,16 +932,24 @@ export function groupFixed(t, gName) {
 }
 export const placeholderLabel = src => {
   if (!src) return '';
+  if (src.startsWith('L:')) { const [, c, k] = src.split(':'); return 'Kalah ' + (c || '16B #' + (+k + 1)); }
   const [, g, k] = src.split(':');
   return (['', 'Johan ', 'Naib ', 'Ke-3 ', 'Ke-4 '][+k] || `Ke-${k} `) + g;
 };
+function koLoser(t, slot) {
+  const m = t.matches.find(x => x.bracket === 'ko' && x.round === 1 && x.slot === slot);
+  if (!m) return null;
+  if (m.status === 'bye') return 'BYE';
+  if (m.status !== 'done' || !m.winner || m.winner === 'BYE') return null;
+  return m.winner === m.a ? m.b : m.a;
+}
 export function resolvePlaceholders(t) {
   let changed = false;
   for (const m of t.matches) {
     for (const s of ['a', 'b']) {
       const src = m['src' + s.toUpperCase()];
       if (!src) continue;
-      const [, g, k] = src.split(':'), id = groupFixed(t, g)[+k] || null;
+      const [, g, k] = src.split(':'), id = src.startsWith('L:') ? koLoser(t, +k) : groupFixed(t, g)[+k] || null;
       if (m[s] !== id) {
         m[s] = id; m.winner = null; m.status = 'pending'; m.override = null; m.lineup = null; m.lt = 0;
         m.rubbers.forEach(x => (x.sets = []));
@@ -971,6 +984,7 @@ export function earlyBracket(t) {
 }
 // Pool kalah (undian) boleh dijana awal bila semua peserta pool sudah pasti kedudukannya
 export function poolReady(t) {
+  if (t.format === 'ko') return t.pool === 'L1' && !!t.rounds.ko;
   if (t.format !== 'group_ko' || t.pool === '0') return false;
   if (groupStageComplete(t)) return true;
   if (Number(t.bestThirds)) return false;
