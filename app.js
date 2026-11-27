@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.19.8';
+const VERSION = 'C1.19.9';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -1328,7 +1328,7 @@ function viewMatch(t, mid) {
       <p class="small" style="margin:4px 0 0">🎯 ${esc(breakLine(t, m))}</p>
       <label>Siapa menang? (tekan nama pemenang setiap game)</label>
       ${seatCard()}
-      <label class="check gp-bkt"><input type="checkbox" id="bkOn" ${ls.get('carrom:bkOn') !== '0' || (m.rubbers || []).some(r => (r.gb || []).some(Boolean)) ? 'checked' : ''}> <span>Catat baki: buah lawan yang tinggal (pilihan)</span></label>
+      ${m.stage !== 'group' ? '' : `<label class="check gp-bkt"><input type="checkbox" id="bkOn" ${ls.get('carrom:bkOn') !== '0' || (m.rubbers || []).some(r => (r.gb || []).some(Boolean)) ? 'checked' : ''}> <span>Catat baki: buah lawan yang tinggal (pilihan)</span></label>`}
       <div class="gp-wrap">${m.rubbers.map(rubberHtml).join('')}</div>
       ${team && t.tieFormat === 'SSD' ? '<p id="dupa" class="small" style="color:#b3261e"></p><p id="dupb" class="small" style="color:#b3261e"></p>' : ''}
       <p id="summary"></p>
