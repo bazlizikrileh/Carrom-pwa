@@ -551,8 +551,17 @@ export const poolMirror = t => {
 // Pool kalah untuk format kalah mati sahaja: yang kalah pusingan pertama (L:<kod>:<slot>)
 const koLoserSlots = t => t.matches.filter(m => m.bracket === 'ko' && m.round === 1).sort((x, y) => x.slot - y.slot)
   .map(m => `L:${m.gn == null ? '' : 'G' + m.gn}:${m.slot}`);
+const koR1 = t => t.matches.filter(m => m.bracket === 'ko' && m.round === 1);
+export const koR1Done = t => koR1(t).length > 0 && koR1(t).every(m => m.status === 'bye' || (m.status === 'done' && m.winner));
 export function poolSlots(t) {
-  if (t.format === 'ko') return t.pool === 'L1' && t.rounds.ko ? koLoserSlots(t) : null;
+  if (t.format === 'ko') {
+    if (t.pool !== 'L1' || !t.rounds.ko) return null;
+    if (t.poolMode !== 'U') return koLoserSlots(t);
+    if (!koR1Done(t)) return null;
+    const ids = shuffle(koR1(t).map(m => koLoser(t, m.slot)).filter(x => x && x !== 'BYE'));
+    if (ids.length < 2) return null;
+    return bracketOrder(nextPow2(ids.length)).map(s => ids[s - 1] || 'BYE');
+  }
   const G = t.groups, full = k => G.every(g => g.members.length >= k);
   const ent = poolMirror(t) ? [1, 2] : poolEntrants(t);
   if (ent.length < 2) return null;
@@ -984,7 +993,7 @@ export function earlyBracket(t) {
 }
 // Pool kalah (undian) boleh dijana awal bila semua peserta pool sudah pasti kedudukannya
 export function poolReady(t) {
-  if (t.format === 'ko') return t.pool === 'L1' && !!t.rounds.ko;
+  if (t.format === 'ko') return t.pool === 'L1' && !!t.rounds.ko && (t.poolMode !== 'U' || koR1Done(t));
   if (t.format !== 'group_ko' || t.pool === '0') return false;
   if (groupStageComplete(t)) return true;
   if (Number(t.bestThirds)) return false;

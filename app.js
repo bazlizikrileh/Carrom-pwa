@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.19.4';
+const VERSION = 'C1.19.5';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -648,6 +648,7 @@ function settingsFormAll(t, locked) {
       <div><label data-label="gf">Format kumpulan</label><select name="groupFormat">${opt(setOpts, t.groupFormat)}</select></div>
       <div data-show="ko"><label>Format kalah mati</label><select name="koFormat">${opt(setOpts, t.koFormat)}</select></div>
       <div data-show="koPool"><label>Pool kalah (looser pool)</label><select name="poolKO">${opt(POOL_KO, t.format === 'ko' && POOL_KO[t.pool] ? t.pool : '0')}</select></div>
+      <div data-show="koPool"><label>Susunan pool kalah</label><select name="poolModeKO">${opt({ M: 'Ikut susunan (kalah G1 lwn kalah G2…)', U: 'Undian (selepas pusingan pertama tamat)' }, t.poolMode === 'U' ? 'U' : 'M')}</select></div>
     </div>
     <label class="check" data-show="team" style="margin-top:10px"><input type="checkbox" name="splitKO" ${t.splitKO !== false ? 'checked' : ''}> <span>⚪ Kalah mati: <b>main serentak</b> jika ada papan kosong<br><small class="muted">Single dan Double dalam pertemuan yang sama boleh dimainkan di papan berlainan pada masa yang sama.</small></span></label>
     <p class="muted small" style="margin:6px 0 0">⚪⚫ Keputusan sahaja: rekod siapa menang setiap game (tiada skor mata). Warna buah (Putih/Coklat lwn Hitam) diundi oleh app untuk setiap perlawanan dan bertukar setiap game.</p>
@@ -737,7 +738,11 @@ function readSettings(form, t) {
   t.tieRule = v('tieRule') || 'draw';
   t.groupFormat = v('groupFormat'); t.koFormat = v('koFormat'); if (form.liveAuto) t.liveAuto = form.liveAuto.checked; if (form.splitKO) t.splitKO = form.splitKO.checked;
   if (form.noUmp) { if (form.noUmp.value) t.noUmp = true; else delete t.noUmp; }
-  t.koMode = v('koMode'); t.pool = (form.format ? form.format.value : t.format) === 'ko' ? (v('poolKO') || '0') : v('pool'); t.poolMode = v('poolMode');
+  { const isKO = (form.format ? form.format.value : t.format) === 'ko', was = t.pool + '|' + t.poolMode;
+    t.koMode = v('koMode'); t.pool = isKO ? (v('poolKO') || '0') : v('pool'); t.poolMode = isKO ? (v('poolModeKO') || 'M') : v('poolMode');
+    // KO sahaja: tetapan pool berubah & pool belum dimainkan → buang carta lama supaya dijana semula ikut tetapan baharu
+    if (isKO && t.rounds && t.rounds.pool && was !== t.pool + '|' + t.poolMode && !t.matches.some(m => m.bracket === 'pool' && (m.status === 'done' || m.rubbers.some(r => r.sets.length)))) {
+      t.matches = t.matches.filter(m => m.bracket !== 'pool'); delete t.rounds.pool; } }
   t.venue = 'X'; t.numTables = Number(v('numTables')) || 0; t.venueName = v('venueName').trim();
   if (form.hcType) t.hcType = form.hcType.value;
   if (form.setPoints) t.setPoints = Math.max(5, Math.min(50, Number(v('setPoints')) || 25));
@@ -1725,17 +1730,19 @@ function viewPool(t) {
   if (!t.rounds.pool) {
     const ready = t.pool !== '0' && t.rounds.ko && E.poolReady(t), early = ready && !E.groupStageComplete(t);
     $app.innerHTML = `${section('Pool kalah', 'Carta Pool Kalah')}<div class="card"><p class="muted">${t.pool === '0' ? 'Pool kalah tidak diadakan.'
-      : t.format === 'ko' ? (ready ? 'Pool kalah untuk regu/pemain yang kalah pusingan pertama. Carta boleh dijana sekarang; nama masuk sendiri bila keputusan pusingan pertama diisi.' : 'Pool kalah dijana selepas carta kalah mati dijana.')
+      : t.format === 'ko' ? (t.poolMode === 'U'
+        ? (ready ? '✅ Pusingan pertama tamat. Pool kalah (yang kalah pusingan pertama) boleh diundi sekarang.' : 'Pool kalah akan diundi selepas semua perlawanan pusingan pertama tamat.')
+        : ready ? 'Pool kalah untuk regu/pemain yang kalah pusingan pertama. Carta boleh dijana sekarang; nama masuk sendiri bila keputusan pusingan pertama diisi.' : 'Pool kalah dijana selepas carta kalah mati dijana.')
       : early ? '✅ Semua peserta pool kalah sudah pasti kedudukannya walaupun ada perlawanan kumpulan yang belum tamat. Pool kalah boleh dijana sekarang.'
       : ready ? 'Peringkat kumpulan tamat. Pool kalah boleh dijana.' : 'Pool kalah dijana selepas kedudukan tempat ke-3' + (t.pool === '34' ? '/ke-4' : '') + ' setiap kumpulan pasti.'}</p>
-      ${ready && canAdmin(t) ? '<button class="pill-btn brand" id="genPool"><span class="dot"></span>Jana pool kalah</button>' : ''}</div>`;
+      ${ready && canAdmin(t) ? `<button class="pill-btn brand" id="genPool"><span class="dot"></span>${t.format === 'ko' && t.poolMode === 'U' ? '🎲 Undi pool kalah' : 'Jana pool kalah'}</button>` : ''}</div>`;
     const gp = document.getElementById('genPool');
-    if (gp) gp.onclick = () => { try { E.buildPool(t); save(t); viewPool(t); if (t.format !== 'ko') playBracketDraw(t, 'pool'); } catch (err) { toast(err.message); } };
+    if (gp) gp.onclick = () => { try { E.buildPool(t); save(t); viewPool(t); if (t.format !== 'ko' || t.poolMode === 'U') playBracketDraw(t, 'pool'); } catch (err) { toast(err.message); } };
     return;
   }
   $app.innerHTML = `${section('Pool kalah', 'Carta Pool Kalah')}
-    ${t.format === 'ko' ? '' : '<div class="row noprint" style="margin-bottom:10px"><button class="pill-btn" data-play="pool"><span class="dot"></span>▶ Tonton undian</button></div>'}
-    <div class="card">${bracketHtml(t, 'pool')}</div><p class="muted small">Ketik perlawanan untuk isi markah. ${t.format === 'ko' ? 'Kalah G1 = yang kalah perlawanan G1.' : 'Label A3, H4 = asal kumpulan.'}</p>`;
+    ${t.format === 'ko' && t.poolMode !== 'U' ? '' : '<div class="row noprint" style="margin-bottom:10px"><button class="pill-btn" data-play="pool"><span class="dot"></span>▶ Tonton undian</button></div>'}
+    <div class="card">${bracketHtml(t, 'pool')}</div><p class="muted small">Ketik perlawanan untuk isi markah. ${t.format === 'ko' ? (t.poolMode === 'U' ? '' : 'Kalah G1 = yang kalah perlawanan G1.') : 'Label A3, H4 = asal kumpulan.'}</p>`;
   const pl = $app.querySelector('[data-play]'); if (pl) pl.onclick = () => playBracketDraw(t, 'pool');
 }
 
@@ -1784,7 +1791,7 @@ function rulesOf(t) {
     rules.push('Kedudukan individu ditentukan mengikut turutan: (1) jumlah mata, (2) beza set (set menang tolak set kalah), (3) beza skor (jumlah mata permainan dimenangi tolak dibolosi). Juara ialah pemain di tangga teratas selepas semua perlawanan selesai.');
     rules.push('Pengadil: pemain yang tidak bermain dalam sesi itu, secara bergilir. Pemain selebihnya berehat.');
   } else if (t.format === 'rr') rules.push('Format liga: setiap peserta bertemu semua peserta lain sekali. Juara ialah peserta di tangga teratas selepas semua perlawanan selesai.', `Format perlawanan: ${gf}.`);
-  else if (t.format === 'ko') { rules.push(`Kalah mati sahaja: ${kf}.`); if (t.pool === 'L1') rules.push('Pool kalah: peserta yang kalah pusingan pertama bermain kalah mati berasingan (yang kalah G1 lwn yang kalah G2, dan seterusnya) menggunakan format kalah mati yang sama.'); }
+  else if (t.format === 'ko') { rules.push(`Kalah mati sahaja: ${kf}.`); if (t.pool === 'L1') rules.push(`Pool kalah: peserta yang kalah pusingan pertama bermain kalah mati berasingan ${t.poolMode === 'U' ? '(susunan diundi selepas pusingan pertama tamat)' : '(yang kalah G1 lwn yang kalah G2, dan seterusnya)'} menggunakan format kalah mati yang sama.`); }
   else {
     rules.push(`Format perlawanan - peringkat kumpulan: ${gf}; kalah mati: ${kf}.`);
     rules.push(t.koMode !== 'U' && E.canMirror(t)
@@ -2356,7 +2363,7 @@ const GUIDE = {
     penganjur: ['Skor <b>menunggu pengesahan</b> dipaparkan di atas: ✓ Sahkan atau ✕ Tolak.', 'Ketik perlawanan untuk membetulkan skor.', 'Perlawanan tamat: <b>📸 Kongsi kad keputusan</b> (🎲 gaya lain).'],
   },
   kalahmati: { penonton: ['Carta cermin terisi sebaik kedudukan kumpulan pasti, jadi kalah mati boleh bermula lebih awal.'], penganjur: ['Carta terisi sendiri. Bila tamat: 🏆 Kongsi poster juara.'] },
-  pool: { penonton: ['Pool kalah untuk peserta yang tidak layak ke kalah mati utama.'] },
+  pool: { penonton: ['Pool kalah untuk peserta yang tidak layak ke kalah mati utama (atau yang kalah pusingan pertama, bagi format kalah mati sahaja).'] },
   laporan: { penonton: ['Laporan dibuka selepas semua perlawanan tamat. Laporan rasmi (PDF), video ringkasan dan ringkasan WhatsApp dikongsi oleh penganjur.'], penganjur: ['Tekan <b>🖨️ Cetak / Simpan PDF</b>, kemudian pilih <b>Simpan sebagai PDF</b>.', '🎬 Video ringkasan dan 💬 ringkasan WhatsApp hanya untuk penganjur & co-admin.'] },
 };
 const roleOf = t => canAdmin(t) ? 'penganjur' : canEdit(t) ? 'pengesah' : ls.get('carrom:scorer:' + t.id) ? 'pengadil' : (ls.get(meKey(t)) || ls.get('carrom:regd:' + t.id)) ? 'peserta' : 'penonton';
