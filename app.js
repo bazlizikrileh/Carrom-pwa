@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.20.0';
+const VERSION = 'C1.20.1';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -1181,8 +1181,9 @@ function hcLine(t, who, n) {
 // siapa pukul dahulu (Putih/Coklat memulakan game)
 const breakLine = (t, m0, k = 0, m = effM(t, m0)) => `${E.colourOf(m, 'a', k) === 'w' ? E.pname(t, m.a) : E.pname(t, m.b)} (⚪ Putih/Coklat) pukul dahulu${E.isTeam(t) ? ' dalam perlawanan pertama; warna bertukar setiap perlawanan/game' : E.fmtFor(t, m.stage).bo > 1 ? ' game 1; warna bertukar setiap game' : ''}`;
 // "baki 3, 5, 2" — baki setiap game (buah lawan yang tinggal), jika dicatat
-const bakiTxt = m => { const L = (m.rubbers || []).flatMap(r => (r.sets || []).map((g, k) => (r.gb || [])[k])).filter(v => v != null); return L.length && L.some(v => v > 0) ? 'baki ' + L.join(', ') : ''; };
-const setRuleTxt = t => 'Kiraan warna: setiap regu mula dengan 9 buah warnanya; regu yang habiskan buahnya dahulu menang game; baki = buah lawan yang masih tinggal. Queen tidak dikira. Warna buah diundi dan bertukar setiap game';
+const bakiTxt = m => { if (m.stage !== 'group') return '';   // kalah mati/pool: baki tidak berkaitan
+  const L = (m.rubbers || []).flatMap(r => (r.sets || []).map((g, k) => (r.gb || [])[k])).filter(v => v != null); return L.length && L.some(v => v > 0) ? 'baki ' + L.join(', ') : ''; };
+const setRuleTxt = t => `Kiraan warna: setiap ${UNIT(t).toLowerCase()} mula dengan 9 buah warnanya; yang habiskan buahnya dahulu menang game${t.format === 'ko' ? '' : '; baki = buah lawan yang masih tinggal'}. Queen tidak dikira. Warna buah diundi dan bertukar setiap game`;
 // Tanda game: warna yang menang setiap game (⚪ Putih/Coklat, ⚫ Hitam)
 const CDOT = { w: '⚪', k: '⚫' };
 const gameMarks = m => (m.rubbers[0] ? m.rubbers[0].sets : []).map((g, k) => CDOT[E.colourOf(m, g[0] > g[1] ? 'a' : 'b', k)]).join(' ');
@@ -1819,6 +1820,7 @@ function viewPool(t) {
 // ---------- Ranking ----------
 function viewRanking(t) { $app.innerHTML = rankingHtml(t); }
 const RANK_NOTE = '<b>Tempat</b> = pusingan terakhir yang dicapai (kalah mati utama, kemudian pool kalah); yang tersingkir di pusingan sama berkongsi Tempat. Dalam Tempat yang sama disusun ikut <b>(a)</b> game ±/main, kemudian <b>(b)</b> game menang/main. <b>†</b> bersemuka. Butiran penuh di bahagian Peraturan.';
+const noGrp = (t, x) => (t.groups.length ? x : x.replace(/ <b>†<\/b> bersemuka\./, '').replace(/ Bersemuka \(†\):[^]*$/, '').replace('(kumpulan, kalah mati dan pool;', '(kalah mati dan pool;'));
 const RANK_RULE = 'Penentuan ranking akhir: Tempat ialah pusingan terakhir yang dicapai, kalah mati utama dahulu, kemudian pool kalah; yang tersingkir di pusingan yang sama berkongsi Tempat (contoh 5–8). Dalam Tempat yang sama, peserta disusun ikut (a) game ±/main = (game menang − game kalah) ÷ main, kemudian (b) game menang/main (dipaparkan hanya jika (a) sama). Main = perlawanan dimainkan (kumpulan, kalah mati dan pool; BYE tidak dikira). Bersemuka (†): jika rakan sekumpulan berada dalam Tempat yang sama, yang lebih tinggi dalam kumpulan diletakkan terus di atas rakan sekumpulannya.';
 function rankingHtml(t, brief) {
   if (t.stage !== 'done') return `${section('Ranking', 'Ranking Peserta')}<div class="card"><p class="muted">Ranking dipaparkan selepas perlawanan akhir tamat${t.rounds.pool ? ' (dan akhir pool kalah)' : ''}.</p></div>`;
@@ -1832,16 +1834,16 @@ function rankingHtml(t, brief) {
     ${section('Keputusan akhir', 'Ranking Peserta')}
     ${ko && ko.winner && !brief ? `<div class="champ">🏆 Johan: ${esc(E.pname(t, ko.winner))}</div>` : ''}
     <div class="card"><div class="print-only club-head">${logosHtml(t)}<div><b>${esc(t.name)}</b><br><span class="muted">${esc(clubOf(t).name)}</span></div></div>
-    <div class="tw"><table class="rank"><thead><tr><th>#</th><th>Tempat*</th><th class="l">${UNIT(t)}</th><th class="l">Pencapaian</th><th>Kump.</th><th>Main</th><th>Game</th><th>(a)</th><th>(b)</th></tr></thead><tbody>
+    <div class="tw"><table class="rank"><thead><tr><th>#</th><th>Tempat*</th><th class="l">${UNIT(t)}</th><th class="l">Pencapaian</th>${t.groups.length ? '<th>Kump.</th>' : ''}<th>Main</th><th>Game</th><th>(a)</th><th>(b)</th></tr></thead><tbody>
       ${rank.map(tr => tr.rows.map(r => `<tr><td>${++n}</td><td>${tr.ids.length > 1 ? `${tr.place}–${tr.place + tr.ids.length - 1}` : tr.place}</td>
-        <td class="l">${pn(t, r.id)}</td><td class="l small">${esc(r.label)}</td><td>${esc(E.seedLabel(t, r.id))}${r.bumped ? ' <span class="dag">†</span>' : ''}</td>
+        <td class="l">${pn(t, r.id)}</td><td class="l small">${esc(r.label)}</td>${t.groups.length ? `<td>${esc(E.seedLabel(t, r.id))}${r.bumped ? ' <span class="dag">†</span>' : ''}</td>` : ''}
         <td>${r.st.p}</td><td>${r.st.sf}-${r.st.sa}</td><td>${r.st.a === 0 ? '0.00' : sign(r.st.a)}</td><td>${showB.has(r.id) ? r.st.b.toFixed(2) : ''}</td></tr>`).join('')).join('')}
     </tbody></table></div>
-    ${brief ? `<div class="foot"><p>* ${RANK_NOTE}</p></div>` : `<div class="foot">
+    ${brief ? `<div class="foot"><p>* ${noGrp(t, RANK_NOTE)}</p></div>` : `<div class="foot">
       <p>* <b>Tempat:</b> pusingan terakhir yang dicapai, kalah mati utama dahulu, kemudian pool kalah. Yang tersingkir di pusingan yang sama berkongsi Tempat (contoh 5–8).</p>
       <p><b>#:</b> dalam Tempat yang sama disusun ikut (a), kemudian (b).</p>
-      <p><b>†</b> Bersemuka: jika rakan sekumpulan berada dalam Tempat yang sama, pemain yang lebih tinggi dalam kumpulan diletakkan terus di atas rakan sekumpulannya.</p>
-      <p><b>Main:</b> perlawanan dimainkan (kumpulan, kalah mati dan pool; BYE tidak dikira). <b>(a)</b> Game ±/main = (game menang − game kalah) ÷ main. <b>(b)</b> Game menang/main, dipaparkan hanya jika (a) sama. Purata = jumlah ÷ bilangan perlawanan, bukan nisbah.</p>
+      ${t.groups.length ? '<p><b>†</b> Bersemuka: jika rakan sekumpulan berada dalam Tempat yang sama, pemain yang lebih tinggi dalam kumpulan diletakkan terus di atas rakan sekumpulannya.</p>' : ''}
+      <p><b>Main:</b> perlawanan dimainkan (${t.groups.length ? 'kumpulan, ' : ''}kalah mati dan pool; BYE tidak dikira). <b>(a)</b> Game ±/main = (game menang − game kalah) ÷ main. <b>(b)</b> Game menang/main, dipaparkan hanya jika (a) sama. Purata = jumlah ÷ bilangan perlawanan, bukan nisbah.</p>
     </div>`}</div>
     <a class="pill-btn light small noprint" href="#/t/${t.id}/laporan">${canAdmin(t) ? '🖨️ Laporan PDF' : '📄 Lihat laporan'}</a>`;
 }
@@ -3789,7 +3791,7 @@ function reportBody(t, played, resTable) {
   const at = p => (R.find(x => x.place === p) || { ids: [] }).ids;
   const pod = [[1, '🥇', 'Johan'], [2, '🥈', 'Naib johan'], [3, '🥉', at(3).length > 1 ? 'Tempat ketiga (bersama)' : 'Tempat ketiga']].filter(([p]) => at(p).length);
   const info = [['Tarikh', dateTxt + (t.startTime ? ` · ${E.sessionTime(t, 1)}` : '')], ['Tempat', t.venueName || '-'], ['Kategori', ENTRY_ALL[t.entryMode] || '-'], ['Format', FORMAT[t.format] || '-'],
-    ['Game', `Kumpulan: ${F[t.groupFormat].label}${t.format === 'group_ko' ? ` · KO: ${F[t.koFormat].label}` : ''}`], ['Peserta', `${t.participants.length} ${UNIT(t).toLowerCase()}`],
+    ['Game', t.format === 'ko' ? `Kalah mati: ${F[t.koFormat].label}${t.rounds.pool ? ' (pool kalah sama)' : ''}` : `Kumpulan: ${F[t.groupFormat].label}${t.format === 'group_ko' ? ` · KO: ${F[t.koFormat].label}` : ''}`], ['Peserta', `${t.participants.length} ${UNIT(t).toLowerCase()}`],
     ['Perlawanan', `${played.length} dimainkan`], ['Papan', `${E.numTablesOf(t)}${t.hcMode === 'manual' ? ' · Handicap' : ''}`]];
   // carta kalah mati/pool: komponen bracket yang sama dengan tab Knockout (garis penyambung, lebar penuh)
   const chart = b => {
@@ -3800,11 +3802,13 @@ function reportBody(t, played, resTable) {
   const sec = (h, inner, cls = '') => inner ? `<section class="rpx-sec ${cls}"><h3>${h}</h3>${inner}</section>` : '';
   const G = t.groups, isRR = t.format === 'rr';
   const resultsBy = ms => ms.length ? resTable(ms) : '';
+  const rankSec = t.stage === 'done' && t.format !== 'rr' ? sec('Ranking Akhir', rankingHtml(t).replace(/^[^]*?<div class="tw">/, '<div class="tw">').replace(/<div class="foot">[^]*$/, `<p class="rpx-note">* ${noGrp(t, RANK_NOTE)}</p>`), 'rk-keep') : '';   // kalah mati sahaja: ranking terus selepas statistik (muka surat 1)
   return `<div class="rpx">
     <div class="rpx-head has-bg" style="--hbg:url('${esc(bannerImg(t, true))}')">${c.logos.map(x => `<img src="${esc(x)}" alt="">`).join('')}<div><div class="rpx-k">LAPORAN PERTANDINGAN CARROM</div><h2>${esc(t.name)}</h2><div class="rpx-club">${esc(c.name)}</div></div></div>
     <div class="rpx-info">${info.map(([k, v]) => `<div><span>${k}</span><b>${esc(v)}</b></div>`).join('')}</div>
     ${pod.length ? `<div class="rpx-pod">${pod.map(([p, ic, lb]) => `<div class="pd${p}"><div class="ic">${ic}</div><div class="lb">${lb}</div><div class="nm">${at(p).map(nm).join('<br>')}</div></div>`).join('')}</div>` : ''}
     ${reportStats(t, played)}
+    ${G.length ? '' : rankSec}
     ${galleryHtml(t)}
     ${E.isMixer(t) ? mixReport(t, played, resTable) : ''}
     ${G.length ? sec(isRR ? 'Kedudukan Liga' : 'Kedudukan Kumpulan', `<div class="rpx-grid">${G.map(g => `<div class="rpx-blk"><h4>${isRR ? 'Liga' : 'Kumpulan ' + esc(g.name)}</h4>${standingsTable(t, g)}</div>`).join('')}</div><p class="rpx-note">Baris berlorek = layak ke kalah mati${t.pool !== '0' && !isRR ? ' / pool kalah' : ''}. Mata: menang 3, kalah 0.</p>`) : ''}
@@ -3812,9 +3816,9 @@ function reportBody(t, played, resTable) {
     ${chart('ko')}${chart('pool')}
     ${G.length ? sec(`Keputusan Peringkat ${isRR ? 'Liga' : 'Kumpulan'}`, G.map(g => { const ms = played.filter(m => m.stage === 'group' && m.group === g.name).sort((x, y) => x.gn - y.gn); return ms.length ? `<div class="rpx-blk"><h4>${isRR ? 'Liga' : 'Kumpulan ' + esc(g.name)}</h4>${resultsBy(ms)}</div>` : ''; }).join('').replace(/^/, G.length > 1 ? '<div class="rpx-grid rpx-res">' : '<div>') + '</div>') : ''}
     ${['ko', 'pool'].map(b => { let h = ''; for (let r = 1; r <= (t.rounds[b] || 0); r++) { const ms = played.filter(m => m.bracket === b && m.round === r).sort((x, y) => x.slot - y.slot); if (ms.length) h += `<div class="rpx-blk"><h4>${esc(E.roundName(t, b, r))}</h4>${resultsBy(ms)}</div>`; } return h ? sec(b === 'ko' ? 'Keputusan Kalah Mati' : 'Keputusan Pool Kalah', `<div class="rpx-grid rpx-res">${h}</div>`) : ''; }).join('')}
-    ${t.stage === 'done' && t.format !== 'rr' ? sec('Ranking Akhir', rankingHtml(t).replace(/^[^]*?<div class="tw">/, '<div class="tw">').replace(/<div class="foot">[^]*$/, `<p class="rpx-note">* ${RANK_NOTE}</p>`), 'rk-keep') : ''}
+    ${G.length ? rankSec : ''}
     ${rosterReport(t)}
-    <section class="rpx-sec"><h3>Peraturan &amp; Penentuan Kedudukan</h3><ol class="rules small rpx-rules">${[...rulesOf(t), ...(t.stage === 'done' && t.format !== 'rr' && !E.isMixer(t) ? [RANK_RULE] : [])].map(r => `<li>${esc(r)}</li>`).join('')}</ol>
+    <section class="rpx-sec"><h3>Peraturan &amp; Penentuan Kedudukan</h3><ol class="rules small rpx-rules">${[...rulesOf(t), ...(t.stage === 'done' && t.format !== 'rr' && !E.isMixer(t) ? [noGrp(t, RANK_RULE)] : [])].map(r => `<li>${esc(r)}</li>`).join('')}</ol>
       <div class="rp-sign"><div><div class="ln"></div>Disediakan oleh<br><small>Nama: ${esc((t.createdBy && t.createdBy.name) || '')}</small></div><div><div class="ln"></div>Disahkan oleh<br><small>Penganjur / Pengurus pertandingan</small></div></div></section>
     <div class="rpx-foot">${store.isCloud(t.id) ? `<div class="rpx-qr" data-qr="${esc(location.origin + location.pathname + '#/t/' + t.id + '/laporan')}"></div><div><b>Laporan dalam talian</b><br><span class="muted small">Imbas untuk lihat jadual, keputusan &amp; carta penuh.</span></div>` : ''}
       <p class="muted small rp-foot">Dijana oleh Carrom Portal · ${new Date().toLocaleString('ms-MY')}</p></div></div>`;

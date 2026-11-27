@@ -757,7 +757,9 @@ export function finalRanking(t) {
     const list = t.matches.filter(m => m.bracket === b);
     const f = list.find(m => m.round === R);
     if (f && f.winner && f.status === 'done') { addTier([f.winner], pre + 'Juara'); addTier([f.winner === f.a ? f.b : f.a], pre + 'Naib juara'); }
-    for (let r = R - 1; r >= 1; r--) {
+    // KO sahaja + pool kalah (yang kalah pusingan pertama): kedudukan mereka ditentukan oleh pool, bukan pusingan 1
+    const lo = b === 'ko' && t.format === 'ko' && t.pool === 'L1' && t.rounds.pool ? 2 : 1;
+    for (let r = R - 1; r >= lo; r--) {
       const ids = list.filter(m => m.round === r && m.status === 'done' && m.winner).map(m => (m.winner === m.a ? m.b : m.a));
       addTier(ids, pre + roundName(t, b, r).replace('Pool: ', ''));
     }
