@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.19.9';
+const VERSION = 'C1.20.0';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -1671,6 +1671,72 @@ async function standingsImages(t) {
   }
 }
 
+// Gambar carta kalah mati / pool kalah: PNG 1080 px untuk WhatsApp
+async function bracketImage(t, b) {
+  const R = t.rounds[b]; if (!R) return null;
+  const logos = await Promise.all(clubOf(t).logos.map(src => new Promise(ok => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => ok(null); im.src = src; })));
+  const list = t.matches.filter(m => m.bracket === b), at = (r, i) => list.find(m => m.round === r && m.slot === i);
+  const n1 = list.filter(m => m.round === 1).length;
+  const W = 1080, F = 'Outfit, system-ui, sans-serif', top = 250, BH = 78, GAP = n1 > 8 ? 14 : 30, LH = BH / 2;
+  const colW = (W - 60) / R, bw = colW - 34;
+  const f = at(R, 0), champ = f && f.status === 'done' && f.winner && f.winner !== 'BYE' ? f.winner : null;
+  const H = top + n1 * (BH + GAP) + (champ ? 120 : 30) + 60;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const c = cv.getContext('2d');
+  const rr = (x, y, w, h, r) => { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); };
+  const fit = (s2, w) => { if (c.measureText(s2).width <= w) return s2; while (s2.length > 1 && c.measureText(s2 + '…').width > w) s2 = s2.slice(0, -1); return s2 + '…'; };
+  c.fillStyle = '#f4f1ea'; c.fillRect(0, 0, W, H);
+  c.fillStyle = '#0f1d3a'; c.fillRect(0, 0, W, 180); c.fillStyle = '#ff7a1a'; c.fillRect(0, 180, W, 6);
+  let lx = 30;
+  for (const lg of logos.filter(Boolean)) { c.fillStyle = '#fff'; rr(lx, 30, 120, 120, 16); c.fill(); const k = Math.min(104 / lg.width, 104 / lg.height); c.drawImage(lg, lx + (120 - lg.width * k) / 2, 30 + (120 - lg.height * k) / 2, lg.width * k, lg.height * k); lx += 134; }
+  const tx = lx + 12;
+  c.fillStyle = '#fff'; c.font = `800 44px ${F}`; c.fillText(b === 'pool' ? 'Carta Pool Kalah' : 'Carta Kalah Mati', tx, 78);
+  c.font = `600 28px ${F}`; c.fillText(fit(t.name, W - tx - 30), tx, 118);
+  c.font = `400 21px ${F}`; c.fillStyle = '#c9d3e6'; c.fillText(fit([t.date, clubOf(t).short, fmtText(E.fmtFor(t, 'ko')).replace(/<[^>]+>/g, '')].filter(Boolean).join(' · '), W - tx - 30), tx, 154);
+  // tajuk pusingan
+  c.textAlign = 'center'; c.font = `800 20px ${F}`; c.fillStyle = '#0f1d3a';
+  for (let r = 1; r <= R; r++) c.fillText(E.roundName(t, b, r).replace(/^Pool: /, '').toUpperCase(), 30 + (r - 1) * colW + bw / 2, top - 24);
+  c.textAlign = 'left';
+  const cy = {}; for (let i = 0; i < n1; i++) cy['1:' + i] = top + i * (BH + GAP) + BH / 2;
+  for (let r = 2; r <= R; r++) for (let i = 0; i < n1 / 2 ** (r - 1); i++) cy[r + ':' + i] = (cy[(r - 1) + ':' + 2 * i] + cy[(r - 1) + ':' + (2 * i + 1)]) / 2;
+  const bo1 = E.fmtFor(t, 'ko').bo === 1;
+  for (let r = 1; r <= R; r++) for (let i = 0; i < n1 / 2 ** (r - 1); i++) {
+    const m = at(r, i); if (!m) continue;
+    const x = 30 + (r - 1) * colW, y = cy[r + ':' + i] - BH / 2;
+    if (r < R) { c.strokeStyle = '#9aa3b5'; c.lineWidth = 2; const nx = x + colW, ny = cy[(r + 1) + ':' + (i >> 1)]; c.beginPath(); c.moveTo(x + bw, y + BH / 2); c.lineTo(x + bw + 17, y + BH / 2); c.lineTo(x + bw + 17, ny); c.lineTo(nx, ny); c.stroke(); }
+    c.fillStyle = '#fff'; rr(x, y, bw, BH, 12); c.fill(); c.strokeStyle = '#d5d9e2'; c.lineWidth = 1.5; rr(x, y, bw, BH, 12); c.stroke();
+    c.fillStyle = '#e6e8ee'; c.fillRect(x + 8, y + LH, bw - 16, 1);
+    const e = E.evaluateMatch(t, m), done = m.status === 'done', sc = done && !bo1 ? E.tieScore(t, e) : null;
+    [[m.a, m.srcA, 0], [m.b, m.srcB, 1]].forEach(([id, src, k]) => {
+      const ly = y + k * LH, win = done && m.winner && m.winner === id && id !== 'BYE', lose = done && m.winner && m.winner !== id;
+      if (win) { c.fillStyle = 'rgba(30,138,38,.14)'; rr(x + 3, ly + 3, bw - 6, LH - 6, 9); c.fill(); }
+      const nm = id ? (id === 'BYE' ? 'BYE' : E.pname(t, id)) : src ? E.placeholderLabel(src) : '…';
+      const wt = id ? (win ? 800 : 600) : 'italic 500'; let fs = 18;
+      do { c.font = `${wt} ${fs}px ${F}`; } while (fs-- > 12 && c.measureText(nm).width > bw - 54);
+      c.fillStyle = !id || id === 'BYE' ? '#8a8f99' : lose ? '#8a8f99' : '#1b2236';
+      c.fillText(fit(nm, bw - 54), x + 12, ly + LH / 2 + 6);
+      const v = done ? (bo1 ? (win ? '✓' : '') : String(sc[k])) : '';
+      if (v) { c.textAlign = 'right'; c.font = `800 18px JetBrains Mono, monospace`; c.fillStyle = win ? '#14632a' : '#8a8f99'; c.fillText(v, x + bw - 12, ly + LH / 2 + 6); c.textAlign = 'left'; }
+    });
+    const code = E.matchCode(m); if (code) { c.font = `700 12px ${F}`; c.fillStyle = '#8a8f99'; c.fillText(code, x + 4, y - 4); }
+  }
+  if (champ) {
+    const y = H - 60 - 100; c.fillStyle = '#0f1d3a'; rr(30, y, W - 60, 84, 18); c.fill();
+    c.textAlign = 'center'; c.fillStyle = '#ffd166'; c.font = `800 22px ${F}`; c.fillText(b === 'pool' ? '🏆 JOHAN POOL KALAH' : '🏆 JOHAN', W / 2, y + 32);
+    c.fillStyle = '#fff'; c.font = `800 30px ${F}`; c.fillText(fit(E.pname(t, champ), W - 120), W / 2, y + 68); c.textAlign = 'left';
+  }
+  c.fillStyle = '#8a8f99'; c.font = `400 17px ${F}`; c.fillText('Hijau = menang. Dijana oleh Carrom Portal.', 30, H - 26);
+  const blob = await new Promise(ok => cv.toBlob(ok, 'image/png'));
+  return new File([blob], `${b === 'pool' ? 'carta-pool-kalah' : 'carta-kalah-mati'}.png`, { type: 'image/png' });
+}
+async function showBracketImage(t, b) {
+  const out = document.getElementById('bimgOut'); if (!out) return;
+  out.innerHTML = '<p class="muted">Menyediakan gambar…</p>';
+  const file = await bracketImage(t, b); if (!file) { out.innerHTML = ''; return toast('Carta belum dijana'); }
+  const url = URL.createObjectURL(file), txt = `${b === 'pool' ? 'Carta pool kalah' : 'Carta kalah mati'} · ${t.name}`;
+  out.innerHTML = `<button class="pill-btn" id="bshr" style="background:#25d366;margin-top:10px">📲 Kongsi ke WhatsApp</button><img src="${url}" alt="${esc(txt)}"><div class="row" style="margin-top:6px"><a class="pill-btn light small" href="${url}" download="${file.name}">Muat turun</a></div>`;
+  document.getElementById('bshr').onclick = async () => { const RP = await import('./reg-poster.js'); RP.shareBlob(file, file.name, t.name, txt); };
+}
+
 // ---------- Kalah mati ----------
 function bracketHtml(t, b, noChamp) {
   const list = t.matches.filter(m => m.bracket === b);
@@ -1714,12 +1780,13 @@ function viewBrackets(t) {
   }
   $app.innerHTML = `${section('Kalah mati', 'Carta Kalah Mati')}
     <div class="row noprint" style="margin-bottom:10px"><button class="pill-btn" data-play="ko"><span class="dot"></span>▶ Tonton undian</button>
-</div>
+      <button class="pill-btn orange" data-bimg="ko"><span class="dot"></span>📷 Gambar carta</button></div><div id="bimgOut" class="imgs noprint"></div>
     ${t.groups.length && !E.groupStageComplete(t) ? `<div class="notice small">⚡ Carta cermin dijana bersama jadual kumpulan. Nama diisi sebaik kedudukan kumpulan <b>pasti</b> (tiada keputusan baki yang boleh mengubahnya), jadi perlawanan kalah mati boleh bermula sebelum semua kumpulan tamat.</div>` : ''}
     <div class="card">${bracketHtml(t, 'ko')}</div>
     <p class="muted small">Ketik perlawanan untuk isi markah. Label A1, H2 = asal kumpulan (kedudukan pasti).</p>
     ${t.format === 'group_ko' && canAdmin(t) ? '<button class="pill-btn light small noprint" id="regen">Jana semula carta</button>' : ''}`;
   $app.querySelectorAll('[data-play]').forEach(b => (b.onclick = () => playBracketDraw(t, b.dataset.play)));
+  $app.querySelectorAll('[data-bimg]').forEach(b => (b.onclick = () => showBracketImage(t, b.dataset.bimg)));
   const rg = document.getElementById('regen');
   if (rg) rg.onclick = () => {
     if (!confirm('Jana semula? Semua skor kalah mati dan pool kalah akan dipadam.')) return;
@@ -1742,9 +1809,11 @@ function viewPool(t) {
     return;
   }
   $app.innerHTML = `${section('Pool kalah', 'Carta Pool Kalah')}
-    ${t.format === 'ko' && t.poolMode !== 'U' ? '' : '<div class="row noprint" style="margin-bottom:10px"><button class="pill-btn" data-play="pool"><span class="dot"></span>▶ Tonton undian</button></div>'}
+    <div class="row noprint" style="margin-bottom:10px">${t.format === 'ko' && t.poolMode !== 'U' ? '' : '<button class="pill-btn" data-play="pool"><span class="dot"></span>▶ Tonton undian</button>'}
+      <button class="pill-btn orange" data-bimg="pool"><span class="dot"></span>📷 Gambar carta</button></div><div id="bimgOut" class="imgs noprint"></div>
     <div class="card">${bracketHtml(t, 'pool')}</div><p class="muted small">Ketik perlawanan untuk isi markah. ${t.format === 'ko' ? (t.poolMode === 'U' ? '' : 'Kalah G1 = yang kalah perlawanan G1.') : 'Label A3, H4 = asal kumpulan.'}</p>`;
   const pl = $app.querySelector('[data-play]'); if (pl) pl.onclick = () => playBracketDraw(t, 'pool');
+  const bi = $app.querySelector('[data-bimg]'); if (bi) bi.onclick = () => showBracketImage(t, 'pool');
 }
 
 // ---------- Ranking ----------
