@@ -5,7 +5,7 @@ import * as cloud from './cloud.js';
 import * as LV from './live.js';
 import * as PUSH from './push.js';
 
-const VERSION = 'C1.19.6';
+const VERSION = 'C1.19.7';
 // Getaran ringan (Android); senyap, tiada bunyi. iPhone tidak menyokong getaran dari web.
 const vib = (p = 15) => { try { navigator.vibrate && navigator.vibrate(p); } catch {} };
 const PINGPONG_URL = 'https://pingpongsantai-portal.pages.dev/';   // pautan silang ke Portal Pingpong
@@ -1799,12 +1799,13 @@ function rulesOf(t) {
       : `Kalah mati: BYE diberi kepada johan kumpulan terbaik (ikut mata, kemudian beza menang-kalah perlawanan dan game). Johan dan naib johan dari kumpulan yang sama diletakkan di separuh bracket berbeza.${t.bestThirds ? ` ${t.bestThirds} tempat ketiga terbaik turut layak.` : ''} Jika saiz kumpulan tidak sama, perbandingan antara kumpulan tidak mengambil kira keputusan menentang pemain tempat terakhir kumpulan yang lebih besar.`);
     if (t.pool !== '0') rules.push(`Pool kalah: ${t.pool === '34' ? 'peserta tempat ketiga yang tidak layak ke kalah mati utama dan semua peserta tempat keempat' : 'peserta tempat ketiga yang tidak layak ke kalah mati utama'} bermain kalah mati berasingan menggunakan format kalah mati yang sama. BYE (jika ada) diberi kepada peserta terbaik.`);
   }
-  if (!E.isMixer(t)) rules.push(!E.isTeam(t) ? 'Menang: 3 mata. Kalah: 0 mata.'
+  const hasTable = t.format !== 'ko';   // kalah mati sahaja: tiada mata / kedudukan
+  if (!E.isMixer(t) && (hasTable || E.isTeam(t))) rules.push(!E.isTeam(t) ? 'Menang: 3 mata. Kalah: 0 mata.'
     : t.tieFormat === 'SSD' ? `Pertemuan ${E.teamWord(t).toLowerCase()}: Single 1 + Single 2 + Double, ketiga-tiga dimainkan. Setiap ahli bermain sekali sahaja (dua pemain single, dua lagi double). Setiap perlawanan: menang 3 markah, seri (1-1) 1 markah, kalah 0. Pemenang pertemuan = jumlah markah tertinggi. ${t.tieRule === 'next' ? 'Jika markah sama: beza set, kemudian jumlah mata.' : 'Jika markah sama di peringkat kumpulan: seri.'} Kedudukan kumpulan: jumlah markah, kemudian beza set, kemudian bersemuka. Kalah mati: jika markah sama, penentu beza set, kemudian jumlah mata.`
     : `Pertemuan ${E.teamWord(t).toLowerCase()}: 1 perlawanan perseorangan + 1 perlawanan regu. Menang 2-0: 3 mata. Seri 1-1: 1 mata. Kalah: 0 mata.`);
-  rules.push('Warna buah: app mengundi pihak yang bermain ⚪ Putih/Coklat dan ⚫ Hitam bagi setiap perlawanan (dipapar dalam jadual). Jika terbaik 3 game, warna bertukar setiap game. Putih/Coklat memulakan game.', 'Keputusan sahaja direkod: siapa menang setiap game. Tiada skor mata.');
-  if (!E.isMixer(t)) rules.push(`Kiraan game: ${setRuleTxt(t)}.`);
-  if (!E.isMixer(t)) rules.push('Jika mata sama, susunan ditentukan mengikut turutan: (1) beza menang-kalah bilangan perlawanan, (2) beza menang-kalah bilangan game, (3) baki ± = jumlah baki ketika menang − jumlah baki ketika kalah (baki = buah lawan yang masih tinggal bila game tamat), (4) keputusan bersemuka (pertemuan sesama peserta yang masih sama; jika tiga atau lebih, bilangan kemenangan sesama mereka). Contoh: 5-2 (+3).');
+  rules.push('Warna buah: app mengundi pihak yang bermain ⚪ Putih/Coklat dan ⚫ Hitam bagi setiap perlawanan (dipapar dalam jadual). Jika terbaik 3 game, warna bertukar setiap game. Putih/Coklat memulakan game.', `Keputusan direkod: siapa menang setiap game${t.format === 'ko' ? '' : ', beserta baki (buah lawan yang masih tinggal) untuk penentu kedudukan'}. Tiada skor mata.`);
+  if (!E.isMixer(t)) rules.push(`${setRuleTxt(t)}.`);
+  if (!E.isMixer(t) && hasTable) rules.push('Jika mata sama, susunan ditentukan mengikut turutan: (1) beza menang-kalah bilangan perlawanan, (2) beza menang-kalah bilangan game, (3) baki ± = jumlah baki ketika menang − jumlah baki ketika kalah (baki = buah lawan yang masih tinggal bila game tamat), (4) keputusan bersemuka (pertemuan sesama peserta yang masih sama; jika tiga atau lebih, bilangan kemenangan sesama mereka). Contoh: 5-2 (+3).');
   const HS = E.HC_SCHEMES[t.hcMode];
   if (t.drawLv && (t.entryMode === 'double_draw' || E.isTeam(t))) rules.push(`Undian ${E.isTeam(t) ? E.teamWord(t).toLowerCase() : 'regu'} diimbangkan ikut tahap: pemain disusun ikut tahap dan dibahagi kepada pot; pot kuat diundi dahulu, kemudian setiap pot seterusnya diberi kepada ${E.isTeam(t) ? E.teamWord(t).toLowerCase() : 'regu'} yang jumlah tahapnya paling rendah (cth. Naga + Helang, Singa + Rimau).`);
   if (t.hcMode === 'manual') rules.push(hcTypeOf(t) === 'buah' ? 'Handicap: angka dalam kurungan (0–10) ialah nilai handicap peserta. Pihak dengan angka lebih rendah menerima kelebihan sebanyak beza angka kedua-dua pihak (maks. 9): bilangan buahnya sendiri yang dikeluarkan dari papan sebelum setiap game bermula.' : 'Handicap: angka dalam kurungan (0–10) ialah nilai handicap peserta. Kelebihan diberi kepada pihak dengan angka lebih rendah mengikut peraturan penganjur.');
